@@ -4,7 +4,7 @@ import java.awt.event.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CreatePatientWindow extends JFrame implements ActionListener {
+public class CreatePatientWindow2 extends JFrame implements ActionListener {
 
     // Labels and textFields
     private final JLabel l2 = new JLabel("Name: ");
@@ -23,6 +23,8 @@ public class CreatePatientWindow extends JFrame implements ActionListener {
     private final JTextField conditionField = new JTextField();
     private final JLabel l8 = new JLabel("Severity: ");
     private final JTextField severityField = new JTextField();
+    private final JLabel l9 = new JLabel("Notes: ");
+    private final JTextField notesField = new JTextField();
 
     // Swing list
     private final DefaultListModel<String> invitedModel = new DefaultListModel<>();
@@ -36,7 +38,7 @@ public class CreatePatientWindow extends JFrame implements ActionListener {
     private final JLabel statusLabel = new JLabel("");
 
     // Constructor
-    public CreatePatientWindow() {
+    public CreatePatientWindow2() {
         final Color LIGHT_BLUE = new Color(51, 204, 255);
         final Color DARK_GREY = Color.DARK_GRAY;
         final Color WHITE = Color.WHITE;
@@ -106,19 +108,28 @@ public class CreatePatientWindow extends JFrame implements ActionListener {
         severityField.setForeground(BLACK);
         add(severityField);
 
+        l9.setBounds(20, 340, 80, 25);
+        l9.setForeground(BLACK);
+        add(l9);
+
+        notesField.setBounds(105, 340, 250, 50);
+        notesField.setBackground(WHITE);
+        notesField.setForeground(BLACK);
+        add(notesField);
+
         // Basic window setup
         setLayout(null);
         getContentPane().setBackground(LIGHT_BLUE);
 
-        setTitle("Create Patient Window");
+        setTitle("Create Patient Window 2");
         createBtn.setText("Create Patient");
 
         setSize(450, 550);
         setLocationRelativeTo(null);
 
         // Heading
-        JLabel heading = new JLabel("Create Patient Window");
-        heading.setBounds(160, 15, 150, 25);
+        JLabel heading = new JLabel("Create Patient Window 2");
+        heading.setBounds(160, 15, 200, 25);
         heading.setForeground(BLACK);
         add(heading);
 
@@ -161,6 +172,6 @@ public class CreatePatientWindow extends JFrame implements ActionListener {
     }
 
     public static void main(String[] args) {
-        new CreatePatientWindow();
+        new CreatePatientWindow2();
     }
 }
