@@ -1,16 +1,12 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.ArrayList;
-import java.util.List;
 
 public class Nurse extends JFrame implements ActionListener {
 
     // Labels and textFields
     private final JLabel l2 = new JLabel("Name: ");
     private final JTextField nameField = new JTextField();
-
-    // New code
     private final JLabel l3 = new JLabel("SSN: ");
     private final JTextField SSNField = new JTextField();
     private final JLabel l4 = new JLabel("Age: ");
@@ -24,25 +20,17 @@ public class Nurse extends JFrame implements ActionListener {
     private final JLabel l8 = new JLabel("Severity: ");
     private final JTextField severityField = new JTextField();
 
-    // Swing list
-    private final DefaultListModel<String> invitedModel = new DefaultListModel<>();
-    private final JList<String> invitedList = new JList<>(invitedModel);
-
     // Action buttons
     private final JButton createBtn = new JButton("Create Patient");
     private final JButton cancelBtn = new JButton("Clear");
 
-    // Status label
-    private final JLabel statusLabel = new JLabel("");
-
     // Constructor
     public Nurse() {
         final Color LIGHT_BLUE = new Color(51, 204, 255);
-        final Color DARK_GREY = Color.DARK_GRAY;
         final Color WHITE = Color.WHITE;
         final Color BLACK = Color.BLACK;
 
-        // new code
+        // set up labels and text fields
         l2.setBounds(20, 100, 80, 25);
         l2.setForeground(BLACK);
         add(l2);
@@ -147,7 +135,7 @@ public class Nurse extends JFrame implements ActionListener {
         // Handle button clicks
         if (src == createBtn) {
             // Their code goes here.
-            
+
         } else if (src == cancelBtn) {
             // set the text to clear
             nameField.setText("");
