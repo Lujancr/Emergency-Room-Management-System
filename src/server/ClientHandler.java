@@ -9,6 +9,10 @@ import src.model.Patient;
 import src.model.StaffUser;
 import src.shared.Protocol;
 
+//this class is the controller in the MVC architecture. It receives requests from the client,
+//interacts with the FileManager (model) to perform actions, and sends responses back to the client.
+//Each instance of ClientHandler runs on its own thread, allowing the server to handle multiple clients concurrently.
+
 /**
  * Handles all communication with a single connected client (doctor or nurse).
  * Runs on its own thread spawned by HospitalServer.

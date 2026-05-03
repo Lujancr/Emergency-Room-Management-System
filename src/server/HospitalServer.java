@@ -17,6 +17,27 @@ public class HospitalServer {
     public static final int DEFAULT_PORT = 5000;
     public static final int THREAD_POOL = 20; // max concurrent clients
 
+    // Singleton — the one and only instance
+    private static HospitalServer instance;
+    private final int port;
+
+    // Private constructor — prevents anyone from calling new HospitalServer()
+    private HospitalServer(int port) {
+        this.port = port;
+    }
+
+    // Returns the single instance, creating it on the first call
+    public static synchronized HospitalServer getInstance(int port) {
+        if (instance == null) {
+            instance = new HospitalServer(port);
+        }
+        return instance;
+    }
+
+    public static synchronized HospitalServer getInstance() {
+        return getInstance(DEFAULT_PORT);
+    }
+
     public static void main(String[] args) {
         int port = DEFAULT_PORT;
         if (args.length > 0) {
