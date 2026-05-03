@@ -10,11 +10,11 @@ import java.util.concurrent.*;
  * client.
  * Uses a thread pool (fixed size) to bound resource usage.
  *
- * Usage: java HospitalServer [port] (default port: 5000)
+ * Usage: java HospitalServer [port] (default port: 2620)
  */
 public class HospitalServer {
 
-    public static final int DEFAULT_PORT = 5000;
+    public static final int DEFAULT_PORT = 2620;
     public static final int THREAD_POOL = 20; // max concurrent clients
 
     // Singleton — the one and only instance
