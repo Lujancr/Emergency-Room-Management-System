@@ -1,6 +1,12 @@
+package src.client;
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
+
+import src.model.BillingEntry;
+import src.model.Patient;
+import src.shared.Protocol;
 
 /**
  * Client-side connection to HospitalServer.
@@ -13,10 +19,10 @@ import java.util.*;
 public class ServerConnection {
 
     private final String host;
-    private final int    port;
-    private Socket       socket;
-    private BufferedReader  in;
-    private PrintWriter     out;
+    private final int port;
+    private Socket socket;
+    private BufferedReader in;
+    private PrintWriter out;
 
     // Populated on successful login
     private String role; // "DOCTOR" or "NURSE"
@@ -29,22 +35,35 @@ public class ServerConnection {
     // ─── Connection lifecycle ─────────────────────────────────────────────
     public synchronized void connect() throws IOException {
         socket = new Socket(host, port);
-        in  = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
     }
 
     public synchronized void disconnect() {
-        try { if (socket != null) socket.close(); } catch (IOException ignored) {}
+        try {
+            if (socket != null)
+                socket.close();
+        } catch (IOException ignored) {
+        }
     }
 
-    public boolean isDoctor() { return Protocol.ROLE_DOCTOR.equals(role); }
-    public boolean isNurse()  { return Protocol.ROLE_NURSE.equals(role);  }
-    public String  getRole()  { return role; }
+    public boolean isDoctor() {
+        return Protocol.ROLE_DOCTOR.equals(role);
+    }
+
+    public boolean isNurse() {
+        return Protocol.ROLE_NURSE.equals(role);
+    }
+
+    public String getRole() {
+        return role;
+    }
 
     // ─── Auth ─────────────────────────────────────────────────────────────
     /**
      * Attempts login. Returns true on success.
      * After success, getRole() / isDoctor() / isNurse() are valid.
+     * 
      * @throws IOException on network error
      */
     public synchronized boolean login(String userId, String password) throws IOException {
@@ -65,7 +84,8 @@ public class ServerConnection {
             if (data != null && !data.isEmpty()) {
                 for (String row : data.split(Protocol.ROW_SEP)) {
                     Patient p = Patient.fromFileLine(row);
-                    if (p != null) list.add(p);
+                    if (p != null)
+                        list.add(p);
                 }
             }
         }
@@ -84,8 +104,11 @@ public class ServerConnection {
     public synchronized int createPatient(Patient patient) throws IOException {
         String response = send(Protocol.CREATE_PATIENT + Protocol.SEP + patient.toFileLine());
         if (isOk(response)) {
-            try { return Integer.parseInt(dataOf(response)); }
-            catch (NumberFormatException e) { return -1; }
+            try {
+                return Integer.parseInt(dataOf(response));
+            } catch (NumberFormatException e) {
+                return -1;
+            }
         }
         return -1;
     }
@@ -111,7 +134,8 @@ public class ServerConnection {
             if (data != null && !data.isEmpty()) {
                 for (String row : data.split(Protocol.ROW_SEP)) {
                     BillingEntry e = BillingEntry.fromFileLine(row);
-                    if (e != null) entries.add(e);
+                    if (e != null)
+                        entries.add(e);
                 }
             }
         }
@@ -153,7 +177,8 @@ public class ServerConnection {
     }
 
     private String dataOf(String response) {
-        if (response == null) return "";
+        if (response == null)
+            return "";
         String[] parts = response.split(Protocol.SEP, 2);
         return parts.length > 1 ? parts[1] : "";
     }

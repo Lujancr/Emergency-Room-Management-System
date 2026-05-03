@@ -1,3 +1,5 @@
+package src.model;
+
 //New
 import java.io.Serializable;
 
@@ -12,8 +14,13 @@ public class BillingEntry implements Serializable {
         this.cost = cost;
     }
 
-    public String getProcedureName() { return procedureName; }
-    public double getCost()          { return cost; }
+    public String getProcedureName() {
+        return procedureName;
+    }
+
+    public double getCost() {
+        return cost;
+    }
 
     /**
      * Serialize to pipe-delimited line for billing_<patientId>.txt
@@ -25,9 +32,10 @@ public class BillingEntry implements Serializable {
 
     public static BillingEntry fromFileLine(String line) {
         String[] parts = line.split("\\|", 2);
-        if (parts.length < 2) return null;
-        String name  = parts[0].replace(";;", "|");
-        double cost  = Double.parseDouble(parts[1].trim());
+        if (parts.length < 2)
+            return null;
+        String name = parts[0].replace(";;", "|");
+        double cost = Double.parseDouble(parts[1].trim());
         return new BillingEntry(name, cost);
     }
 

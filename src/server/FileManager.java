@@ -1,7 +1,12 @@
+package src.server;
+
 import java.io.*;
-import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import src.model.BillingEntry;
+import src.model.Patient;
+import src.model.StaffUser;
 
 /**
  * Thread-safe file I/O manager for all persistent data.
@@ -12,52 +17,48 @@ public class FileManager {
 
     // ── File paths (relative to server working directory) ─────────────────
     public static final String PATIENTS_FILE = "data/patients.txt";
-    public static final String STAFF_FILE    = "data/staff.txt";
-    public static final String BILLING_DIR   = "data/billing/";
+    public static final String STAFF_FILE = "data/staff.txt";
+    public static final String BILLING_DIR = "data/billing/";
 
     private final ReentrantReadWriteLock patientLock = new ReentrantReadWriteLock();
-    private final ReentrantReadWriteLock staffLock   = new ReentrantReadWriteLock();
+    private final ReentrantReadWriteLock staffLock = new ReentrantReadWriteLock();
     // Per-patient billing locks keyed by patient id
     private final Map<Integer, ReentrantReadWriteLock> billingLocks = new HashMap<>();
 
     // ── Singleton ──────────────────────────────────────────────────────────
     private static FileManager instance;
+
     private FileManager() {
         // Create directories if they don't exist
-        new File("data").mkdirs();
         new File(BILLING_DIR).mkdirs();
-        seedDefaultFilesIfAbsent();
+        verifyFilesExist();
     }
+
     public static synchronized FileManager getInstance() {
-        if (instance == null) instance = new FileManager();
+        if (instance == null)
+            instance = new FileManager();
         return instance;
     }
 
-    // ── Seed sample data on first run ─────────────────────────────────────
-    private void seedDefaultFilesIfAbsent() {
-        File pf = new File(PATIENTS_FILE);
-        if (!pf.exists()) {
-            try (PrintWriter pw = new PrintWriter(new FileWriter(pf))) {
-                // id|firstName|lastName|age|height|weight|ssn|condition|severity|doctorNotes|discharged
-                pw.println("1|John|Doe|45|5'10\"|185.5|123-45-6789|Hypertension|2|Monitor BP daily.|false");
-                pw.println("2|Jane|Smith|32|5'6\"|140.0|987-65-4321|Appendicitis|3|Pre-op scheduled.|false");
-                pw.println("3|Bob|Johnson|60|6'0\"|210.0|555-44-3333|Diabetes Type 2|1|Diet changes recommended.|false");
-            } catch (IOException e) { e.printStackTrace(); }
+    /**
+     * Warns at startup if expected data files are missing so the problem
+     * is obvious immediately rather than silently returning empty data.
+     */
+    private void verifyFilesExist() {
+        if (!new File(PATIENTS_FILE).exists()) {
+            System.err.println("[FileManager] WARNING: patients file not found at: " + PATIENTS_FILE);
+        } else {
+            System.out.println("[FileManager] Loaded patients file: " + PATIENTS_FILE);
         }
-        File sf = new File(STAFF_FILE);
-        if (!sf.exists()) {
-            try (PrintWriter pw = new PrintWriter(new FileWriter(sf))) {
-                // userId|password|isDoctor
-                pw.println("doc1|pass123|true");
-                pw.println("doc2|pass456|true");
-                pw.println("nur1|nurse123|false");
-                pw.println("nur2|nurse456|false");
-            } catch (IOException e) { e.printStackTrace(); }
+        if (!new File(STAFF_FILE).exists()) {
+            System.err.println("[FileManager] WARNING: credentials file not found at: " + STAFF_FILE);
+        } else {
+            System.out.println("[FileManager] Loaded credentials file: " + STAFF_FILE);
         }
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  STAFF
+    // STAFF
     // ═════════════════════════════════════════════════════════════════════
 
     public StaffUser authenticateUser(String userId, String password) {
@@ -76,7 +77,7 @@ public class FileManager {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  PATIENTS
+    // PATIENTS
     // ═════════════════════════════════════════════════════════════════════
 
     public List<Patient> getAllPatients() {
@@ -85,7 +86,8 @@ public class FileManager {
             List<Patient> list = new ArrayList<>();
             for (String line : readLines(PATIENTS_FILE)) {
                 Patient p = Patient.fromFileLine(line);
-                if (p != null) list.add(p);
+                if (p != null)
+                    list.add(p);
             }
             return list;
         } finally {
@@ -98,7 +100,8 @@ public class FileManager {
         try {
             for (String line : readLines(PATIENTS_FILE)) {
                 Patient p = Patient.fromFileLine(line);
-                if (p != null && p.getId() == id) return p;
+                if (p != null && p.getId() == id)
+                    return p;
             }
         } finally {
             patientLock.readLock().unlock();
@@ -114,7 +117,8 @@ public class FileManager {
             int maxId = 0;
             for (String line : lines) {
                 Patient p = Patient.fromFileLine(line);
-                if (p != null && p.getId() > maxId) maxId = p.getId();
+                if (p != null && p.getId() > maxId)
+                    maxId = p.getId();
             }
             int newId = maxId + 1;
             // rebuild patient with correct id using a new Patient object
@@ -133,7 +137,8 @@ public class FileManager {
 
     /**
      * Updates a patient record.
-     * If nurseUpdate=true, the doctorNotes field from the incoming patient is ignored;
+     * If nurseUpdate=true, the doctorNotes field from the incoming patient is
+     * ignored;
      * the existing doctorNotes value is preserved.
      */
     public boolean updatePatient(Patient updated, boolean nurseUpdate) {
@@ -144,7 +149,8 @@ public class FileManager {
             for (int i = 0; i < lines.size(); i++) {
                 Patient existing = Patient.fromFileLine(lines.get(i));
                 if (existing != null && existing.getId() == updated.getId()) {
-                    if (existing.isDischarged()) return false; // locked
+                    if (existing.isDischarged())
+                        return false; // locked
                     if (nurseUpdate) {
                         // preserve doctor notes
                         updated.setDoctorNotes(existing.getDoctorNotes());
@@ -154,7 +160,8 @@ public class FileManager {
                     break;
                 }
             }
-            if (found) writeLines(PATIENTS_FILE, lines);
+            if (found)
+                writeLines(PATIENTS_FILE, lines);
             return found;
         } finally {
             patientLock.writeLock().unlock();
@@ -170,7 +177,8 @@ public class FileManager {
             for (int i = 0; i < lines.size(); i++) {
                 Patient p = Patient.fromFileLine(lines.get(i));
                 if (p != null && p.getId() == id) {
-                    if (p.isDischarged()) return false;
+                    if (p.isDischarged())
+                        return false;
                     p.setSeverity(4);
                     p.setDischarged(true);
                     lines.set(i, p.toFileLine());
@@ -178,7 +186,8 @@ public class FileManager {
                     break;
                 }
             }
-            if (found) writeLines(PATIENTS_FILE, lines);
+            if (found)
+                writeLines(PATIENTS_FILE, lines);
             return found;
         } finally {
             patientLock.writeLock().unlock();
@@ -186,7 +195,7 @@ public class FileManager {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  BILLING
+    // BILLING
     // ═════════════════════════════════════════════════════════════════════
 
     private String billingFilePath(int patientId) {
@@ -203,10 +212,12 @@ public class FileManager {
         try {
             List<BillingEntry> entries = new ArrayList<>();
             String path = billingFilePath(patientId);
-            if (!new File(path).exists()) return entries;
+            if (!new File(path).exists())
+                return entries;
             for (String line : readLines(path)) {
                 BillingEntry e = BillingEntry.fromFileLine(line);
-                if (e != null) entries.add(e);
+                if (e != null)
+                    entries.add(e);
             }
             return entries;
         } finally {
@@ -233,7 +244,8 @@ public class FileManager {
         lock.writeLock().lock();
         try {
             String path = billingFilePath(patientId);
-            if (!new File(path).exists()) return false;
+            if (!new File(path).exists())
+                return false;
             List<String> lines = readLines(path);
             for (int i = 0; i < lines.size(); i++) {
                 BillingEntry e = BillingEntry.fromFileLine(lines.get(i));
@@ -251,26 +263,33 @@ public class FileManager {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  Helpers
+    // Helpers
     // ═════════════════════════════════════════════════════════════════════
 
     private List<String> readLines(String filePath) {
         List<String> lines = new ArrayList<>();
         File f = new File(filePath);
-        if (!f.exists()) return lines;
+        if (!f.exists())
+            return lines;
         try (BufferedReader br = new BufferedReader(new FileReader(f))) {
             String line;
             while ((line = br.readLine()) != null) {
                 line = line.trim();
-                if (!line.isEmpty()) lines.add(line);
+                if (!line.isEmpty())
+                    lines.add(line);
             }
-        } catch (IOException e) { e.printStackTrace(); }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         return lines;
     }
 
     private void writeLines(String filePath, List<String> lines) {
         try (PrintWriter pw = new PrintWriter(new FileWriter(filePath, false))) {
-            for (String line : lines) pw.println(line);
-        } catch (IOException e) { e.printStackTrace(); }
+            for (String line : lines)
+                pw.println(line);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

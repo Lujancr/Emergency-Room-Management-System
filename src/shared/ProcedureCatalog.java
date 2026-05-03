@@ -1,3 +1,5 @@
+package src.shared;
+
 import java.util.*;
 
 /**
@@ -14,26 +16,26 @@ public class ProcedureCatalog {
 
     static {
         Map<String, Double> m = new LinkedHashMap<>(); // LinkedHashMap preserves insertion order for display
-        m.put("General Consultation",        150.00);
-        m.put("Blood Test",                  200.00);
-        m.put("X-Ray",                       350.00);
-        m.put("MRI Scan",                   1200.00);
-        m.put("CT Scan",                     900.00);
-        m.put("Ultrasound",                  500.00);
-        m.put("EKG / ECG",                   250.00);
-        m.put("Appendectomy",               8500.00);
-        m.put("Heart Bypass Surgery",      45000.00);
-        m.put("Knee Replacement",          15000.00);
-        m.put("Physical Therapy Session",    120.00);
-        m.put("Emergency Room Visit",        800.00);
-        m.put("ICU Day Rate",              3000.00);
-        m.put("General Anesthesia",        2000.00);
-        m.put("IV Therapy",                  300.00);
-        m.put("Prescription Medication",     100.00);
-        m.put("Colonoscopy",                1100.00);
-        m.put("Endoscopy",                   950.00);
-        m.put("Dialysis Session",            500.00);
-        m.put("Chemotherapy Session",       5000.00);
+        m.put("General Consultation", 150.00);
+        m.put("Blood Test", 200.00);
+        m.put("X-Ray", 350.00);
+        m.put("MRI Scan", 1200.00);
+        m.put("CT Scan", 900.00);
+        m.put("Ultrasound", 500.00);
+        m.put("EKG / ECG", 250.00);
+        m.put("Appendectomy", 8500.00);
+        m.put("Heart Bypass Surgery", 45000.00);
+        m.put("Knee Replacement", 15000.00);
+        m.put("Physical Therapy Session", 120.00);
+        m.put("Emergency Room Visit", 800.00);
+        m.put("ICU Day Rate", 3000.00);
+        m.put("General Anesthesia", 2000.00);
+        m.put("IV Therapy", 300.00);
+        m.put("Prescription Medication", 100.00);
+        m.put("Colonoscopy", 1100.00);
+        m.put("Endoscopy", 950.00);
+        m.put("Dialysis Session", 500.00);
+        m.put("Chemotherapy Session", 5000.00);
         CATALOG = Collections.unmodifiableMap(m);
     }
 
