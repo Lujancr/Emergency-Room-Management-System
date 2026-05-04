@@ -78,6 +78,9 @@ public class MainWindow extends JFrame {
             showNewPatientForm(); // nurses start on the blank New Patient tab
         }
 
+        // Immediately notified when the IO thread detects server disconnect
+        conn.setOnDisconnect(this::handleServerDisconnect);
+
         startHeartbeat();
     }
 
@@ -672,16 +675,21 @@ public class MainWindow extends JFrame {
     // Server disconnect detection
     // ─────────────────────────────────────────────────────────────────────
 
+    /** Guards against showing the disconnected dialog more than once. */
+    private volatile boolean disconnectHandled = false;
+
     /**
      * Polls the server every 5 seconds with a lightweight ping.
-     * If the connection drops (IOException or null response), shows a
-     * dialog and returns the user to the login screen.
+     * Acts as a fallback — the IO thread's onDisconnect callback fires
+     * immediately when the connection drops. The heartbeat catches cases
+     * where the socket stays open but the server is no longer responding.
      */
     private void startHeartbeat() {
         Thread heartbeat = new Thread(() -> {
-            while (true) {
+            while (!disconnectHandled) {
                 try {
                     Thread.sleep(5000);
+                    if (disconnectHandled) break;
                     boolean alive = conn.ping();
                     if (!alive) {
                         handleServerDisconnect();
@@ -700,11 +708,16 @@ public class MainWindow extends JFrame {
     }
 
     private void handleServerDisconnect() {
+        // Ensure we only show the dialog once, even if both the IO thread
+        // callback and the heartbeat fire at nearly the same time.
+        if (disconnectHandled) return;
+        disconnectHandled = true;
+
         SwingUtilities.invokeLater(() -> {
             setEnabled(false);
             JOptionPane.showMessageDialog(
                     null,
-                    "The server has shut down.\nYou have been signed out.",
+                    "The server has shut down or the connection was lost.\nYou have been disconnected.",
                     "Disconnected",
                     JOptionPane.WARNING_MESSAGE);
             conn.disconnect();
