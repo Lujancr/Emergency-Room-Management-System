@@ -17,7 +17,7 @@ public class FileManager {
 
     // ── File paths (relative to server working directory) ─────────────────
     public static final String PATIENTS_FILE = "data/patients.txt";
-    public static final String STAFF_FILE = "data/staff.txt";
+    public static final String STAFF_FILE = "data/credentials.txt";
     public static final String BILLING_DIR = "data/billing/";
 
     private final ReentrantReadWriteLock patientLock = new ReentrantReadWriteLock();
