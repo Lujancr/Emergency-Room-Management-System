@@ -24,8 +24,20 @@ public class ServerConnection {
     private BufferedReader in;
     private PrintWriter out;
 
+    // Responses from the server are placed here by the push-listener thread
+    // so that send() can retrieve them without racing with push messages.
+    private final java.util.concurrent.LinkedBlockingQueue<String> responseQueue =
+            new java.util.concurrent.LinkedBlockingQueue<>();
+
+    // True once startPushListener() has been called; send() routes through
+    // the queue only after that point to avoid a deadlock at login time.
+    private volatile boolean pushListenerActive = false;
+
     // Populated on successful login
     private String role; // "DOCTOR" or "NURSE"
+
+    // Called on the EDT whenever the server pushes a PUSH_REFRESH message
+    private Runnable onPushRefresh;
 
     public ServerConnection(String host, int port) {
         this.host = host;
@@ -37,6 +49,53 @@ public class ServerConnection {
         socket = new Socket(host, port);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
+    }
+
+    /**
+     * Register a callback that is invoked on the Swing EDT whenever the server
+     * sends a PUSH_REFRESH. Call this once after login, before showing MainWindow.
+     */
+    public void setOnPushRefresh(Runnable callback) {
+        this.onPushRefresh = callback;
+    }
+
+    /**
+     * Starts a daemon thread that reads unsolicited push messages from the server.
+     * Normal request/response traffic uses send() on the main synchronized path;
+     * push messages arrive between responses and are routed here.
+     *
+     * Because both this thread and send() share the same BufferedReader, we use
+     * a dedicated second socket connection on a well-known push port offset (+1)
+     * to avoid read races.
+     *
+     * Simpler alternative used here: the server sends PUSH_REFRESH on the same
+     * connection but only between client requests (the client is idle waiting).
+     * We start a thread that blocks on readLine(); when it wakes it checks if
+     * the line is a push message and dispatches it, otherwise it is a queued
+     * response that send() is waiting for — handled via a LinkedBlockingQueue.
+     */
+    public void startPushListener() {
+        pushListenerActive = true;
+        Thread t = new Thread(() -> {
+            while (!socket.isClosed()) {
+                try {
+                    String line = in.readLine();
+                    if (line == null) break; // server closed connection
+                    if (line.equals(Protocol.PUSH_REFRESH)) {
+                        if (onPushRefresh != null) {
+                            javax.swing.SwingUtilities.invokeLater(onPushRefresh);
+                        }
+                    } else {
+                        // Normal response — put it back for send() to pick up
+                        responseQueue.put(line);
+                    }
+                } catch (Exception e) {
+                    break;
+                }
+            }
+        });
+        t.setDaemon(true);
+        t.start();
     }
 
     public synchronized void disconnect() {
@@ -156,6 +215,7 @@ public class ServerConnection {
         return isOk(response);
     }
 
+    // ─── Heartbeat ────────────────────────────────────────────────────────
     /**
      * Sends a lightweight ping to the server.
      * Returns true if the server responds with OK, false if the connection
@@ -183,7 +243,17 @@ public class ServerConnection {
     // ─── Low-level helpers ────────────────────────────────────────────────
     private String send(String message) throws IOException {
         out.println(message);
-        return in.readLine();
+        if (!pushListenerActive) {
+            // Push listener not yet started (e.g. during login) — read directly
+            return in.readLine();
+        }
+        try {
+            // Push listener is running; it puts responses into the queue
+            return responseQueue.take();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted waiting for server response", e);
+        }
     }
 
     private boolean isOk(String response) {
