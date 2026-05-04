@@ -248,33 +248,34 @@ public class MainWindow extends JFrame {
     }
 
     private JPanel buildButtonBar() {
-        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 8));
+        // BorderLayout: left buttons on WEST, action button on EAST
+        JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(new Color(225, 237, 248));
-        bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.GRAY));
+        bar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, Color.GRAY),
+                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
+
+        // Left side: Billing Info (and Discharge for doctors)
+        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        left.setOpaque(false);
 
         billingButton = makeButton("Billing Info");
         billingButton.addActionListener(e -> openBillingDialog());
-        bar.add(billingButton);
+        left.add(billingButton);
 
         if (isDoctor) {
             dischargeButton = makeButton("Discharge Patient");
             dischargeButton.addActionListener(e -> dischargeCurrentPatient());
-            bar.add(dischargeButton);
+            left.add(dischargeButton);
         }
 
-        // Action button right-aligned
+        // Right side: Create Patient (nurse) or Update Patient (doctor)
         String actionLabel = isDoctor ? "Update Patient" : "Create Patient";
         actionButton = makeButton(actionLabel);
         actionButton.addActionListener(e -> performAction());
 
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        right.setOpaque(false);
-        right.add(actionButton);
-
-        // Push right panel to the far right
-        bar.add(Box.createHorizontalStrut(
-                Math.max(0, getWidth() - 350))); // approximate spacer; layout managers handle the rest
-        bar.add(right);
+        bar.add(left, BorderLayout.WEST);
+        bar.add(actionButton, BorderLayout.EAST);
 
         return bar;
     }
