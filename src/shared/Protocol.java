@@ -11,13 +11,13 @@ public class Protocol {
     public static final String ADD_BILL_ENTRY = "ADD_BILL_ENTRY";
     public static final String DELETE_BILL_ENTRY = "DELETE_BILL_ENTRY";
     public static final String PING = "PING";
+    public static final String PUSH_REFRESH = "PUSH_REFRESH"; // server→client: reload patient list
 
     // Misc
     public static final String OK = "OK";
     public static final String ERROR = "ERROR";
     public static final String SEP = "\t"; // field separator in protocol messages
-    public static final String ROW_SEP = "~~"; // must not be newline — readLine() strips it // row separator inside
-                                               // data payloads
+    public static final String ROW_SEP = "~~"; // must not be newline — readLine() strips it // row separator inside data payloads
 
     // Role strings returned on successful login
     public static final String ROLE_DOCTOR = "DOCTOR";
