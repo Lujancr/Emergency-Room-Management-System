@@ -3,6 +3,7 @@ package src.client;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 import src.model.BillingEntry;
 import src.model.Patient;
@@ -10,95 +11,77 @@ import src.shared.Protocol;
 
 /**
  * Client-side connection to HospitalServer.
- * Wraps the socket in a simple request/response helper.
- * The GUI should create one instance after login and keep it alive.
  *
- * All public methods are synchronised so they are safe to call from
- * Swing's Event Dispatch Thread as well as background threads.
+ * Threading model (fixes the push/response race condition):
+ *
+ * One dedicated I/O thread owns the socket exclusively — it is the only
+ * thread that ever calls in.readLine() or out.println(). All other threads
+ * (EDT, SwingWorkers, heartbeat) submit a Request object to a
+ * LinkedBlockingQueue and then block on a SynchronousQueue inside that
+ * Request waiting for the response string to be handed back.
+ *
+ * When the I/O thread reads a line it checks whether it is a PUSH_REFRESH
+ * (dispatches the refresh callback on the EDT) or a normal response
+ * (hands it back to whichever Request is waiting).
+ *
+ * Because only one thread touches the streams there is no race condition,
+ * no synchronized keyword needed on individual methods, and no possibility
+ * of the push listener stealing a response that send() was expecting.
  */
 public class ServerConnection {
 
+    // ── Connection fields ─────────────────────────────────────────────────
     private final String host;
     private final int port;
     private Socket socket;
     private BufferedReader in;
     private PrintWriter out;
 
-    // Responses from the server are placed here by the push-listener thread
-    // so that send() can retrieve them without racing with push messages.
-    private final java.util.concurrent.LinkedBlockingQueue<String> responseQueue =
-            new java.util.concurrent.LinkedBlockingQueue<>();
+    // ── Populated on successful login ─────────────────────────────────────
+    private String role;
 
-    // True once startPushListener() has been called; send() routes through
-    // the queue only after that point to avoid a deadlock at login time.
-    private volatile boolean pushListenerActive = false;
+    // ── Push callback ─────────────────────────────────────────────────────
+    private volatile Runnable onPushRefresh;
 
-    // Populated on successful login
-    private String role; // "DOCTOR" or "NURSE"
+    // ── I/O thread machinery ──────────────────────────────────────────────
+    /** Callers put a Request here; the I/O thread drains it. */
+    private final LinkedBlockingQueue<Request> requestQueue = new LinkedBlockingQueue<>();
 
-    // Called on the EDT whenever the server pushes a PUSH_REFRESH message
-    private Runnable onPushRefresh;
+    /** Set to true once the I/O thread is running. */
+    private volatile boolean ioThreadActive = false;
 
+    /**
+     * A single request/response pair. The caller blocks on responseSlot.take()
+     * until the I/O thread puts the server's reply in.
+     */
+    private static class Request {
+        final String message;
+        final SynchronousQueue<String> responseSlot = new SynchronousQueue<>();
+
+        Request(String message) {
+            this.message = message;
+        }
+    }
+
+    // ── Constructor ───────────────────────────────────────────────────────
     public ServerConnection(String host, int port) {
         this.host = host;
         this.port = port;
     }
 
-    // ─── Connection lifecycle ─────────────────────────────────────────────
-    public synchronized void connect() throws IOException {
+    // ── Connection lifecycle ──────────────────────────────────────────────
+    /**
+     * Opens the socket and starts the I/O thread.
+     * Must be called before any other method.
+     */
+    public void connect() throws IOException {
         socket = new Socket(host, port);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
+        startIOThread();
     }
 
-    /**
-     * Register a callback that is invoked on the Swing EDT whenever the server
-     * sends a PUSH_REFRESH. Call this once after login, before showing MainWindow.
-     */
-    public void setOnPushRefresh(Runnable callback) {
-        this.onPushRefresh = callback;
-    }
-
-    /**
-     * Starts a daemon thread that reads unsolicited push messages from the server.
-     * Normal request/response traffic uses send() on the main synchronized path;
-     * push messages arrive between responses and are routed here.
-     *
-     * Because both this thread and send() share the same BufferedReader, we use
-     * a dedicated second socket connection on a well-known push port offset (+1)
-     * to avoid read races.
-     *
-     * Simpler alternative used here: the server sends PUSH_REFRESH on the same
-     * connection but only between client requests (the client is idle waiting).
-     * We start a thread that blocks on readLine(); when it wakes it checks if
-     * the line is a push message and dispatches it, otherwise it is a queued
-     * response that send() is waiting for — handled via a LinkedBlockingQueue.
-     */
-    public void startPushListener() {
-        pushListenerActive = true;
-        Thread t = new Thread(() -> {
-            while (!socket.isClosed()) {
-                try {
-                    String line = in.readLine();
-                    if (line == null) break; // server closed connection
-                    if (line.equals(Protocol.PUSH_REFRESH)) {
-                        if (onPushRefresh != null) {
-                            javax.swing.SwingUtilities.invokeLater(onPushRefresh);
-                        }
-                    } else {
-                        // Normal response — put it back for send() to pick up
-                        responseQueue.put(line);
-                    }
-                } catch (Exception e) {
-                    break;
-                }
-            }
-        });
-        t.setDaemon(true);
-        t.start();
-    }
-
-    public synchronized void disconnect() {
+    public void disconnect() {
         try {
             if (socket != null)
                 socket.close();
@@ -106,6 +89,16 @@ public class ServerConnection {
         }
     }
 
+    // ── Push callback registration ────────────────────────────────────────
+    /**
+     * Register a callback invoked on the Swing EDT whenever the server sends
+     * PUSH_REFRESH. Call before showing MainWindow.
+     */
+    public void setOnPushRefresh(Runnable callback) {
+        this.onPushRefresh = callback;
+    }
+
+    // ── Role helpers ──────────────────────────────────────────────────────
     public boolean isDoctor() {
         return Protocol.ROLE_DOCTOR.equals(role);
     }
@@ -118,14 +111,8 @@ public class ServerConnection {
         return role;
     }
 
-    // ─── Auth ─────────────────────────────────────────────────────────────
-    /**
-     * Attempts login. Returns true on success.
-     * After success, getRole() / isDoctor() / isNurse() are valid.
-     * 
-     * @throws IOException on network error
-     */
-    public synchronized boolean login(String userId, String password) throws IOException {
+    // ── Auth ──────────────────────────────────────────────────────────────
+    public boolean login(String userId, String password) throws IOException {
         String response = send(Protocol.LOGIN + Protocol.SEP + userId + Protocol.SEP + password);
         if (isOk(response)) {
             role = dataOf(response);
@@ -134,8 +121,8 @@ public class ServerConnection {
         return false;
     }
 
-    // ─── Patients ─────────────────────────────────────────────────────────
-    public synchronized List<Patient> getAllPatients() throws IOException {
+    // ── Patients ──────────────────────────────────────────────────────────
+    public List<Patient> getAllPatients() throws IOException {
         String response = send(Protocol.GET_ALL_PATIENTS);
         List<Patient> list = new ArrayList<>();
         if (isOk(response)) {
@@ -151,16 +138,14 @@ public class ServerConnection {
         return list;
     }
 
-    public synchronized Patient getPatient(int id) throws IOException {
+    public Patient getPatient(int id) throws IOException {
         String response = send(Protocol.GET_PATIENT + Protocol.SEP + id);
-        if (isOk(response)) {
+        if (isOk(response))
             return Patient.fromFileLine(dataOf(response));
-        }
         return null;
     }
 
-    /** Nurse only. Returns the newly assigned patient ID, or -1 on error. */
-    public synchronized int createPatient(Patient patient) throws IOException {
+    public int createPatient(Patient patient) throws IOException {
         String response = send(Protocol.CREATE_PATIENT + Protocol.SEP + patient.toFileLine());
         if (isOk(response)) {
             try {
@@ -172,20 +157,18 @@ public class ServerConnection {
         return -1;
     }
 
-    /** Returns true on success. */
-    public synchronized boolean updatePatient(Patient patient) throws IOException {
+    public boolean updatePatient(Patient patient) throws IOException {
         String response = send(Protocol.UPDATE_PATIENT + Protocol.SEP + patient.toFileLine());
         return isOk(response);
     }
 
-    /** Doctor only. Returns true on success. */
-    public synchronized boolean dischargePatient(int patientId) throws IOException {
+    public boolean dischargePatient(int patientId) throws IOException {
         String response = send(Protocol.DISCHARGE_PATIENT + Protocol.SEP + patientId);
         return isOk(response);
     }
 
-    // ─── Billing ──────────────────────────────────────────────────────────
-    public synchronized List<BillingEntry> getBill(int patientId) throws IOException {
+    // ── Billing ───────────────────────────────────────────────────────────
+    public List<BillingEntry> getBill(int patientId) throws IOException {
         String response = send(Protocol.GET_BILL + Protocol.SEP + patientId);
         List<BillingEntry> entries = new ArrayList<>();
         if (isOk(response)) {
@@ -201,27 +184,20 @@ public class ServerConnection {
         return entries;
     }
 
-    /** Doctor only. */
-    public synchronized boolean addBillEntry(int patientId, String procedureName, double cost) throws IOException {
+    public boolean addBillEntry(int patientId, String procedureName, double cost) throws IOException {
         String response = send(Protocol.ADD_BILL_ENTRY + Protocol.SEP + patientId
                 + Protocol.SEP + procedureName + Protocol.SEP + cost);
         return isOk(response);
     }
 
-    /** Doctor only. */
-    public synchronized boolean deleteBillEntry(int patientId, String procedureName, double cost) throws IOException {
+    public boolean deleteBillEntry(int patientId, String procedureName, double cost) throws IOException {
         String response = send(Protocol.DELETE_BILL_ENTRY + Protocol.SEP + patientId
                 + Protocol.SEP + procedureName + Protocol.SEP + cost);
         return isOk(response);
     }
 
-    // ─── Heartbeat ────────────────────────────────────────────────────────
-    /**
-     * Sends a lightweight ping to the server.
-     * Returns true if the server responds with OK, false if the connection
-     * is dead (IOException or unexpected response).
-     */
-    public synchronized boolean ping() {
+    // ── Heartbeat ─────────────────────────────────────────────────────────
+    public boolean ping() {
         try {
             String response = send(Protocol.PING);
             return isOk(response);
@@ -230,8 +206,7 @@ public class ServerConnection {
         }
     }
 
-    // ─── Error message helper ──────────────────────────────────────────────
-    /** Returns the error message from the last ERROR response, or null. */
+    // ── Error message helper ──────────────────────────────────────────────
     public static String errorMessage(String response) {
         if (response != null && response.startsWith(Protocol.ERROR)) {
             String[] parts = response.split(Protocol.SEP, 2);
@@ -240,16 +215,85 @@ public class ServerConnection {
         return null;
     }
 
-    // ─── Low-level helpers ────────────────────────────────────────────────
-    private String send(String message) throws IOException {
-        out.println(message);
-        if (!pushListenerActive) {
-            // Push listener not yet started (e.g. during login) — read directly
-            return in.readLine();
+    // ── I/O thread ────────────────────────────────────────────────────────
+    /**
+     * The single thread that owns the socket streams.
+     *
+     * It loops doing two things in alternation:
+     * 1. Drain the requestQueue — send each request message to the server,
+     * then read exactly one response line and hand it back to the caller.
+     * 2. After handing back the response, do a non-blocking check for any
+     * further incoming lines (push messages that arrived while idle).
+     *
+     * Because only this thread ever calls readLine(), there is no race
+     * between request/response and push messages.
+     */
+    private void startIOThread() {
+        ioThreadActive = true;
+        Thread ioThread = new Thread(() -> {
+            try {
+                while (!socket.isClosed()) {
+                    // ── Wait for a request from any caller ────────────────
+                    Request req = requestQueue.poll(100, TimeUnit.MILLISECONDS);
+
+                    if (req != null) {
+                        // Send the request
+                        out.println(req.message);
+
+                        // Read lines until we get a non-push response
+                        String line;
+                        while ((line = in.readLine()) != null) {
+                            if (line.equals(Protocol.PUSH_REFRESH)) {
+                                dispatchRefresh();
+                                // Keep reading — our real response is still coming
+                            } else {
+                                // This is the response for req
+                                req.responseSlot.put(line);
+                                break;
+                            }
+                        }
+                        if (line == null)
+                            break; // server closed connection
+                    }
+                    // No request pending — loop back and poll again.
+                    // Any PUSH_REFRESH that arrives while idle will be
+                    // picked up on the next pass through the poll timeout.
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (IOException e) {
+                // Socket closed or network error — normal on disconnect
+            } finally {
+                ioThreadActive = false;
+            }
+        }, "ServerConnection-IO");
+        ioThread.setDaemon(true);
+        ioThread.start();
+    }
+
+    private void dispatchRefresh() {
+        Runnable cb = onPushRefresh;
+        if (cb != null) {
+            javax.swing.SwingUtilities.invokeLater(cb);
         }
+    }
+
+    // ── Low-level send ────────────────────────────────────────────────────
+    /**
+     * Submits a message to the I/O thread and blocks until the response
+     * arrives. Safe to call from any thread.
+     */
+    private String send(String message) throws IOException {
+        if (!ioThreadActive)
+            throw new IOException("I/O thread not running");
+        Request req = new Request(message);
         try {
-            // Push listener is running; it puts responses into the queue
-            return responseQueue.take();
+            requestQueue.put(req);
+            // Block until the I/O thread hands back the response
+            String response = req.responseSlot.poll(10, TimeUnit.SECONDS);
+            if (response == null)
+                throw new IOException("Server response timed out");
+            return response;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted waiting for server response", e);

@@ -11,21 +11,17 @@ import java.awt.*;
  * On successful login opens the appropriate MainWindow (Doctor or Nurse).
  *
  * Usage: java src.gui.LoginFrame
- *
- * The user enters the server's IP address (or hostname) so that multiple
- * laptops on the same LAN can all connect to one shared server machine.
  */
 public class LoginFrame extends JFrame {
 
-    private static final int SERVER_PORT = 2620;
-    private static final String DEFAULT_HOST = "localhost";
+    private static final String SERVER_HOST = "localhost";
+    private static final int SERVER_PORT = 5000;
 
     private static final Color CLR_BG = new Color(173, 216, 230);
     private static final Color CLR_FIELD = new Color(210, 230, 245);
     private static final Font FONT_TITLE = new Font("SansSerif", Font.BOLD, 16);
     private static final Font FONT_LABEL = new Font("SansSerif", Font.PLAIN, 13);
 
-    private JTextField hostField;
     private JTextField userIdField;
     private JPasswordField passwordField;
     private JButton loginButton;
@@ -34,7 +30,7 @@ public class LoginFrame extends JFrame {
     public LoginFrame() {
         setTitle("Hospital Management System — Login");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(420, 280);
+        setSize(420, 240);
         setLocationRelativeTo(null);
         setResizable(false);
         buildUI();
@@ -55,15 +51,9 @@ public class LoginFrame extends JFrame {
         title.setForeground(new Color(30, 70, 110));
         main.add(title, BorderLayout.NORTH);
 
-        // Form — 3 rows: Server IP, User ID, Password
-        JPanel form = new JPanel(new GridLayout(3, 2, 8, 10));
+        // Form
+        JPanel form = new JPanel(new GridLayout(2, 2, 8, 10));
         form.setOpaque(false);
-
-        form.add(makeLabel("Server IP:"));
-        hostField = makeTextField();
-        hostField.setText(DEFAULT_HOST);
-        hostField.setToolTipText("IP address of the machine running HospitalServer (e.g. 192.168.1.10)");
-        form.add(hostField);
 
         form.add(makeLabel("User ID:"));
         userIdField = makeTextField();
@@ -105,14 +95,9 @@ public class LoginFrame extends JFrame {
     // ─────────────────────────────────────────────────────────────────────
 
     private void performLogin() {
-        String host = hostField.getText().trim();
         String userId = userIdField.getText().trim();
         String password = new String(passwordField.getPassword());
 
-        if (host.isEmpty()) {
-            statusLabel.setText("Please enter the server IP address.");
-            return;
-        }
         if (userId.isEmpty() || password.isEmpty()) {
             statusLabel.setText("Please enter User ID and password.");
             return;
@@ -120,14 +105,14 @@ public class LoginFrame extends JFrame {
 
         loginButton.setEnabled(false);
         statusLabel.setForeground(new Color(60, 90, 130));
-        statusLabel.setText("Connecting to " + host + "…");
+        statusLabel.setText("Connecting…");
 
         SwingWorker<String, Void> worker = new SwingWorker<>() {
             private ServerConnection conn;
 
             @Override
             protected String doInBackground() throws Exception {
-                conn = new ServerConnection(host, SERVER_PORT);
+                conn = new ServerConnection(SERVER_HOST, SERVER_PORT);
                 conn.connect();
                 boolean ok = conn.login(userId, password);
                 if (!ok) {
@@ -148,7 +133,10 @@ public class LoginFrame extends JFrame {
                     } else {
                         dispose();
                         boolean isDoctor = Protocol.ROLE_DOCTOR.equals(role);
-                        new MainWindow(conn, isDoctor).setVisible(true);
+                        MainWindow mainWindow = new MainWindow(conn, isDoctor);
+                        // Wire up real-time push: server tells all clients to refresh
+                        conn.setOnPushRefresh(mainWindow::refreshPatientList);
+                        mainWindow.setVisible(true);
                     }
                 } catch (Exception ex) {
                     statusLabel.setForeground(Color.RED);
