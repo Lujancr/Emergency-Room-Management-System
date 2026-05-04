@@ -156,6 +156,20 @@ public class ServerConnection {
         return isOk(response);
     }
 
+    /**
+     * Sends a lightweight ping to the server.
+     * Returns true if the server responds with OK, false if the connection
+     * is dead (IOException or unexpected response).
+     */
+    public synchronized boolean ping() {
+        try {
+            String response = send(Protocol.PING);
+            return isOk(response);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     // ─── Error message helper ──────────────────────────────────────────────
     /** Returns the error message from the last ERROR response, or null. */
     public static String errorMessage(String response) {

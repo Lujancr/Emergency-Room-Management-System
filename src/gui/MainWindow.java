@@ -4,7 +4,6 @@ import src.client.ServerConnection;
 import src.model.Patient;
 import src.shared.Protocol;
 
-
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -15,55 +14,55 @@ import java.util.List;
  * MainWindow — primary application frame shared by Doctor and Nurse roles.
  *
  * Doctor view (wireframe image 2):
- *   - Patient list (no "New Patient" button)
- *   - Fields: Name, Age, Height, Weight, Condition, Severity, Notes
- *   - Buttons: Billing Info | Discharge Patient | Update Patient
+ * - Patient list (no "New Patient" button)
+ * - Fields: Name, Age, Height, Weight, Condition, Severity, Notes
+ * - Buttons: Billing Info | Discharge Patient | Update Patient
  *
  * Nurse view (wireframe image 1):
- *   - Patient list with "New Patient" button at top
- *   - Fields: Name, Age, Height, Weight, Condition, Severity  (no Notes)
- *   - Buttons: Billing Info | Create Patient / Update Patient
+ * - Patient list with "New Patient" button at top
+ * - Fields: Name, Age, Height, Weight, Condition, Severity (no Notes)
+ * - Buttons: Billing Info | Create Patient / Update Patient
  */
 public class MainWindow extends JFrame {
 
     // ── Colour palette ────────────────────────────────────────────────────
-    private static final Color CLR_HEADER_BG  = new Color(173, 216, 230);
+    private static final Color CLR_HEADER_BG = new Color(173, 216, 230);
     private static final Color CLR_SIDEBAR_BG = new Color(200, 225, 240);
-    private static final Color CLR_FIELD_BG   = new Color(173, 216, 230);
+    private static final Color CLR_FIELD_BG = new Color(173, 216, 230);
     private static final Color CLR_DISCHARGED = new Color(160, 160, 160);
-    private static final Color CLR_BTN        = new Color(210, 210, 210);
-    private static final Font  FONT_TITLE      = new Font("SansSerif", Font.BOLD, 18);
-    private static final Font  FONT_LABEL      = new Font("SansSerif", Font.PLAIN, 13);
-    private static final Font  FONT_PATIENT_ID = new Font("SansSerif", Font.BOLD, 13);
-    private static final Font  FONT_PATIENT_NM = new Font("SansSerif", Font.PLAIN, 11);
+    private static final Color CLR_BTN = new Color(210, 210, 210);
+    private static final Font FONT_TITLE = new Font("SansSerif", Font.BOLD, 18);
+    private static final Font FONT_LABEL = new Font("SansSerif", Font.PLAIN, 13);
+    private static final Font FONT_PATIENT_ID = new Font("SansSerif", Font.BOLD, 13);
+    private static final Font FONT_PATIENT_NM = new Font("SansSerif", Font.PLAIN, 11);
 
     // ── State ─────────────────────────────────────────────────────────────
     private final ServerConnection conn;
-    private final boolean          isDoctor;
-    private Patient                currentPatient = null;
+    private final boolean isDoctor;
+    private Patient currentPatient = null;
 
     // ── Sidebar widgets ───────────────────────────────────────────────────
     private JTextField searchField;
-    private JPanel     patientListPanel;
+    private JPanel patientListPanel;
 
     // ── Content-area widgets ──────────────────────────────────────────────
-    private JLabel     patientIdLabel;
+    private JLabel patientIdLabel;
 
     private JTextField nameField;
     private JTextField ageField;
     private JTextField heightField;
     private JTextField weightField;
-    private JTextArea  conditionArea;
+    private JTextArea conditionArea;
     private JTextField severityField;
-    private JTextArea  notesArea;        // doctor only
+    private JTextArea notesArea; // doctor only
 
     private JButton billingButton;
-    private JButton dischargeButton;    // doctor only
-    private JButton actionButton;       // "Create Patient" | "Update Patient"
+    private JButton dischargeButton; // doctor only
+    private JButton actionButton; // "Create Patient" | "Update Patient"
 
     // ── Constructor ───────────────────────────────────────────────────────
     public MainWindow(ServerConnection conn, boolean isDoctor) {
-        this.conn     = conn;
+        this.conn = conn;
         this.isDoctor = isDoctor;
 
         setTitle("Hospital Management System — " + (isDoctor ? "Doctor" : "Nurse"));
@@ -76,19 +75,21 @@ public class MainWindow extends JFrame {
         refreshPatientList();
 
         if (!isDoctor) {
-            showNewPatientForm();   // nurses start on the blank New Patient tab
+            showNewPatientForm(); // nurses start on the blank New Patient tab
         }
+
+        startHeartbeat();
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  UI Construction
+    // UI Construction
     // ═════════════════════════════════════════════════════════════════════
 
     private void buildUI() {
         setLayout(new BorderLayout());
-        add(buildHeaderPanel(),  BorderLayout.NORTH);
-        add(buildSidebar(),      BorderLayout.WEST);
-        add(buildContentArea(),  BorderLayout.CENTER);
+        add(buildHeaderPanel(), BorderLayout.NORTH);
+        add(buildSidebar(), BorderLayout.WEST);
+        add(buildContentArea(), BorderLayout.CENTER);
     }
 
     // ── Header ────────────────────────────────────────────────────────────
@@ -133,16 +134,24 @@ public class MainWindow extends JFrame {
                 BorderFactory.createLineBorder(Color.GRAY),
                 BorderFactory.createEmptyBorder(3, 5, 3, 5)));
         searchField.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e)  { filterPatientList(); }
-            public void removeUpdate(DocumentEvent e)  { filterPatientList(); }
-            public void changedUpdate(DocumentEvent e) { filterPatientList(); }
+            public void insertUpdate(DocumentEvent e) {
+                filterPatientList();
+            }
+
+            public void removeUpdate(DocumentEvent e) {
+                filterPatientList();
+            }
+
+            public void changedUpdate(DocumentEvent e) {
+                filterPatientList();
+            }
         });
 
         JPanel topBar = new JPanel(new BorderLayout(0, 3));
         topBar.setBackground(CLR_SIDEBAR_BG);
         topBar.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
         topBar.add(patientsTitle, BorderLayout.NORTH);
-        topBar.add(searchField,   BorderLayout.CENTER);
+        topBar.add(searchField, BorderLayout.CENTER);
 
         // Scrollable list of patient buttons
         patientListPanel = new JPanel();
@@ -155,8 +164,8 @@ public class MainWindow extends JFrame {
         scroll.setBorder(null);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
 
-        sidebar.add(topBar,  BorderLayout.NORTH);
-        sidebar.add(scroll,  BorderLayout.CENTER);
+        sidebar.add(topBar, BorderLayout.NORTH);
+        sidebar.add(scroll, BorderLayout.CENTER);
         return sidebar;
     }
 
@@ -180,7 +189,7 @@ public class MainWindow extends JFrame {
         formScroll.getVerticalScrollBar().setUnitIncrement(16);
 
         content.add(patientIdLabel, BorderLayout.NORTH);
-        content.add(formScroll,     BorderLayout.CENTER);
+        content.add(formScroll, BorderLayout.CENTER);
         content.add(buildButtonBar(), BorderLayout.SOUTH);
         return content;
     }
@@ -195,16 +204,20 @@ public class MainWindow extends JFrame {
         lc.insets = new Insets(6, 4, 6, 10);
 
         GridBagConstraints fc = new GridBagConstraints();
-        fc.fill    = GridBagConstraints.HORIZONTAL;
+        fc.fill = GridBagConstraints.HORIZONTAL;
         fc.weightx = 1.0;
-        fc.insets  = new Insets(6, 0, 6, 4);
+        fc.insets = new Insets(6, 0, 6, 4);
 
         int row = 0;
 
-        nameField    = makeTextField();   addFormRow(form, "Name:",      nameField,    lc, fc, row++);
-        ageField     = makeTextField();   addFormRow(form, "Age:",       ageField,     lc, fc, row++);
-        heightField  = makeTextField();   addFormRow(form, "Height:",    heightField,  lc, fc, row++);
-        weightField  = makeTextField();   addFormRow(form, "Weight:",    weightField,  lc, fc, row++);
+        nameField = makeTextField();
+        addFormRow(form, "Name:", nameField, lc, fc, row++);
+        ageField = makeTextField();
+        addFormRow(form, "Age:", ageField, lc, fc, row++);
+        heightField = makeTextField();
+        addFormRow(form, "Height:", heightField, lc, fc, row++);
+        weightField = makeTextField();
+        addFormRow(form, "Weight:", weightField, lc, fc, row++);
 
         conditionArea = makeTextArea(4);
         addFormRow(form, "Condition:", scrolledArea(conditionArea), lc, fc, row++);
@@ -213,9 +226,9 @@ public class MainWindow extends JFrame {
         severityField = makeTextField();
         severityField.setPreferredSize(new Dimension(55, 26));
         GridBagConstraints sevfc = (GridBagConstraints) fc.clone();
-        sevfc.fill    = GridBagConstraints.NONE;
+        sevfc.fill = GridBagConstraints.NONE;
         sevfc.weightx = 0;
-        sevfc.anchor  = GridBagConstraints.WEST;
+        sevfc.anchor = GridBagConstraints.WEST;
         addFormRow(form, "Severity:", severityField, lc, sevfc, row++);
 
         // Notes — doctor only
@@ -226,9 +239,9 @@ public class MainWindow extends JFrame {
 
         // Vertical filler
         GridBagConstraints filler = new GridBagConstraints();
-        filler.gridy   = row;
+        filler.gridy = row;
         filler.weighty = 1.0;
-        filler.fill    = GridBagConstraints.VERTICAL;
+        filler.fill = GridBagConstraints.VERTICAL;
         form.add(Box.createVerticalGlue(), filler);
 
         return form;
@@ -260,22 +273,25 @@ public class MainWindow extends JFrame {
 
         // Push right panel to the far right
         bar.add(Box.createHorizontalStrut(
-                Math.max(0, getWidth() - 350)));  // approximate spacer; layout managers handle the rest
+                Math.max(0, getWidth() - 350))); // approximate spacer; layout managers handle the rest
         bar.add(right);
 
         return bar;
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  Patient list
+    // Patient list
     // ═════════════════════════════════════════════════════════════════════
 
     public void refreshPatientList() {
         SwingWorker<List<Patient>, Void> worker = new SwingWorker<>() {
-            @Override protected List<Patient> doInBackground() throws Exception {
+            @Override
+            protected List<Patient> doInBackground() throws Exception {
                 return conn.getAllPatients();
             }
-            @Override protected void done() {
+
+            @Override
+            protected void done() {
                 try {
                     rebuildPatientList(get());
                 } catch (Exception ex) {
@@ -325,7 +341,7 @@ public class MainWindow extends JFrame {
         nameLbl.setFont(FONT_PATIENT_NM);
         nameLbl.setForeground(new Color(60, 60, 60));
 
-        btn.add(idLbl,   BorderLayout.NORTH);
+        btn.add(idLbl, BorderLayout.NORTH);
         btn.add(nameLbl, BorderLayout.CENTER);
         btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
         btn.setFocusPainted(false);
@@ -360,14 +376,16 @@ public class MainWindow extends JFrame {
     private String collectText(Container container) {
         StringBuilder sb = new StringBuilder();
         for (Component c : container.getComponents()) {
-            if (c instanceof JLabel lbl) sb.append(lbl.getText()).append(' ');
-            else if (c instanceof Container sub) sb.append(collectText(sub));
+            if (c instanceof JLabel lbl)
+                sb.append(lbl.getText()).append(' ');
+            else if (c instanceof Container sub)
+                sb.append(collectText(sub));
         }
         return sb.toString();
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  Form population
+    // Form population
     // ═════════════════════════════════════════════════════════════════════
 
     private void showNewPatientForm() {
@@ -380,7 +398,8 @@ public class MainWindow extends JFrame {
         weightField.setText("");
         conditionArea.setText("");
         severityField.setText("");
-        if (notesArea != null) notesArea.setText("");
+        if (notesArea != null)
+            notesArea.setText("");
 
         setFieldsEditable(true);
         billingButton.setEnabled(false);
@@ -398,7 +417,8 @@ public class MainWindow extends JFrame {
         weightField.setText(String.valueOf(p.getWeight()));
         conditionArea.setText(p.getCondition());
         severityField.setText(String.valueOf(p.getSeverity()));
-        if (notesArea != null) notesArea.setText(p.getDoctorNotes());
+        if (notesArea != null)
+            notesArea.setText(p.getDoctorNotes());
 
         boolean discharged = p.isDischarged();
         setFieldsEditable(!discharged);
@@ -419,7 +439,8 @@ public class MainWindow extends JFrame {
         weightField.setEditable(editable);
         conditionArea.setEditable(editable);
         severityField.setEditable(editable);
-        if (notesArea != null) notesArea.setEditable(editable);
+        if (notesArea != null)
+            notesArea.setEditable(editable);
 
         Color bg = editable ? CLR_FIELD_BG : new Color(210, 210, 210);
         nameField.setBackground(bg);
@@ -428,22 +449,23 @@ public class MainWindow extends JFrame {
         weightField.setBackground(bg);
         conditionArea.setBackground(bg);
         severityField.setBackground(bg);
-        if (notesArea != null) notesArea.setBackground(bg);
+        if (notesArea != null)
+            notesArea.setBackground(bg);
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  Actions
+    // Actions
     // ═════════════════════════════════════════════════════════════════════
 
     private void performAction() {
         // ── collect & validate ──
-        String name   = nameField.getText().trim();
+        String name = nameField.getText().trim();
         String ageStr = ageField.getText().trim();
         String height = heightField.getText().trim();
-        String wtStr  = weightField.getText().trim();
-        String cond   = conditionArea.getText().trim();
+        String wtStr = weightField.getText().trim();
+        String cond = conditionArea.getText().trim();
         String sevStr = severityField.getText().trim();
-        String notes  = (notesArea != null) ? notesArea.getText().trim() : "";
+        String notes = (notesArea != null) ? notesArea.getText().trim() : "";
 
         // Name: split into first/last (require at least two words)
         String[] nameParts = name.split("\\s+", 2);
@@ -469,19 +491,22 @@ public class MainWindow extends JFrame {
         }
 
         String firstName = nameParts[0];
-        String lastName  = nameParts[1];
-        int    age       = Integer.parseInt(ageStr);
-        int    severity  = Integer.parseInt(sevStr);
+        String lastName = nameParts[1];
+        int age = Integer.parseInt(ageStr);
+        int severity = Integer.parseInt(sevStr);
 
         if (currentPatient == null) {
             // ── Create new patient (nurse) ──
             Patient p = new Patient(0, firstName, lastName, age,
                     height, weight, "", cond, severity, notes, false);
             SwingWorker<Integer, Void> worker = new SwingWorker<>() {
-                @Override protected Integer doInBackground() throws Exception {
+                @Override
+                protected Integer doInBackground() throws Exception {
                     return conn.createPatient(p);
                 }
-                @Override protected void done() {
+
+                @Override
+                protected void done() {
                     try {
                         int newId = get();
                         if (newId < 0) {
@@ -491,7 +516,8 @@ public class MainWindow extends JFrame {
                             refreshPatientList();
                             // reload so we can show the assigned ID
                             Patient created = conn.getPatient(newId);
-                            if (created != null) showPatient(created);
+                            if (created != null)
+                                showPatient(created);
                         }
                     } catch (Exception ex) {
                         showError("Failed to create patient: " + ex.getMessage());
@@ -511,10 +537,13 @@ public class MainWindow extends JFrame {
             currentPatient.setDoctorNotes(notes);
 
             SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
-                @Override protected Boolean doInBackground() throws Exception {
+                @Override
+                protected Boolean doInBackground() throws Exception {
                     return conn.updatePatient(currentPatient);
                 }
-                @Override protected void done() {
+
+                @Override
+                protected void done() {
                     try {
                         boolean ok = get();
                         if (ok) {
@@ -535,7 +564,8 @@ public class MainWindow extends JFrame {
     }
 
     private void dischargeCurrentPatient() {
-        if (currentPatient == null) return;
+        if (currentPatient == null)
+            return;
         if (currentPatient.getSeverity() != 4) {
             showError("Discharge is only allowed when Severity = 4.");
             return;
@@ -544,13 +574,17 @@ public class MainWindow extends JFrame {
                 "Discharge " + currentPatient.getFullName() + "?\n"
                         + "Their record will become read-only.",
                 "Confirm Discharge", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) return;
+        if (confirm != JOptionPane.YES_OPTION)
+            return;
 
         SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
-            @Override protected Boolean doInBackground() throws Exception {
+            @Override
+            protected Boolean doInBackground() throws Exception {
                 return conn.dischargePatient(currentPatient.getId());
             }
-            @Override protected void done() {
+
+            @Override
+            protected void done() {
                 try {
                     boolean ok = get();
                     if (ok) {
@@ -569,7 +603,8 @@ public class MainWindow extends JFrame {
     }
 
     private void openBillingDialog() {
-        if (currentPatient == null) return;
+        if (currentPatient == null)
+            return;
         if (isDoctor) {
             new DoctorBillingDialog(this, conn, currentPatient).setVisible(true);
         } else {
@@ -578,7 +613,7 @@ public class MainWindow extends JFrame {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  UI helpers
+    // UI helpers
     // ═════════════════════════════════════════════════════════════════════
 
     private JTextField makeTextField() {
@@ -617,16 +652,63 @@ public class MainWindow extends JFrame {
     }
 
     private void addFormRow(JPanel form, String labelText, Component field,
-                            GridBagConstraints lc, GridBagConstraints fc, int row) {
-        lc.gridy = row; lc.gridx = 0;
-        fc.gridy = row; fc.gridx = 1;
+            GridBagConstraints lc, GridBagConstraints fc, int row) {
+        lc.gridy = row;
+        lc.gridx = 0;
+        fc.gridy = row;
+        fc.gridx = 1;
         JLabel lbl = new JLabel(labelText);
         lbl.setFont(FONT_LABEL);
-        form.add(lbl,   lc);
+        form.add(lbl, lc);
         form.add(field, fc);
     }
 
     private void showError(String msg) {
         JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Server disconnect detection
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Polls the server every 5 seconds with a lightweight ping.
+     * If the connection drops (IOException or null response), shows a
+     * dialog and returns the user to the login screen.
+     */
+    private void startHeartbeat() {
+        Thread heartbeat = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(5000);
+                    boolean alive = conn.ping();
+                    if (!alive) {
+                        handleServerDisconnect();
+                        return;
+                    }
+                } catch (InterruptedException e) {
+                    return; // window closed cleanly
+                } catch (Exception e) {
+                    handleServerDisconnect();
+                    return;
+                }
+            }
+        });
+        heartbeat.setDaemon(true); // won't prevent JVM exit
+        heartbeat.start();
+    }
+
+    private void handleServerDisconnect() {
+        SwingUtilities.invokeLater(() -> {
+            setEnabled(false);
+            JOptionPane.showMessageDialog(
+                    null,
+                    "The server has shut down.\nYou have been signed out.",
+                    "Disconnected",
+                    JOptionPane.WARNING_MESSAGE);
+            conn.disconnect();
+            dispose();
+            new LoginFrame().setVisible(true);
+        });
     }
 }

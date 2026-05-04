@@ -82,6 +82,8 @@ public class ClientHandler implements Runnable {
                 return handleAddBillEntry(parts);
             case Protocol.DELETE_BILL_ENTRY:
                 return handleDeleteBillEntry(parts);
+            case Protocol.PING:
+                return ok("");
             default:
                 return err("Unknown command: " + cmd);
         }
