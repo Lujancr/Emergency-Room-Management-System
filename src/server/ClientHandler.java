@@ -25,6 +25,9 @@ public class ClientHandler implements Runnable {
     // Populated after successful LOGIN
     private StaffUser loggedInUser = null;
 
+    // Kept so we can register/unregister with HospitalServer for broadcasts
+    private PrintWriter out;
+
     public ClientHandler(Socket socket) {
         this.socket = socket;
     }
@@ -34,15 +37,18 @@ public class ClientHandler implements Runnable {
         System.out.println("[Server] Client connected: " + socket.getInetAddress());
         try (
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true)) {
+                PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true)) {
+            this.out = writer;
+            HospitalServer.registerClient(writer);
             String requestLine;
             while ((requestLine = in.readLine()) != null) {
                 String response = handleRequest(requestLine.trim());
-                out.println(response);
+                writer.println(response);
             }
         } catch (IOException e) {
             System.out.println("[Server] Client disconnected: " + socket.getInetAddress());
         } finally {
+            if (out != null) HospitalServer.unregisterClient(out);
             try {
                 socket.close();
             } catch (IOException ignored) {
@@ -82,6 +88,8 @@ public class ClientHandler implements Runnable {
                 return handleAddBillEntry(parts);
             case Protocol.DELETE_BILL_ENTRY:
                 return handleDeleteBillEntry(parts);
+            case Protocol.PING:
+                return ok("");
             default:
                 return err("Unknown command: " + cmd);
         }
@@ -133,6 +141,7 @@ public class ClientHandler implements Runnable {
         if (template == null)
             return err("Malformed patient data");
         int newId = fm.createPatient(template);
+        HospitalServer.broadcast(Protocol.PUSH_REFRESH, out);
         return ok(String.valueOf(newId));
     }
 
@@ -144,6 +153,7 @@ public class ClientHandler implements Runnable {
             return err("Malformed patient data");
         boolean nurseUpdate = !loggedInUser.isDoctor();
         boolean success = fm.updatePatient(updated, nurseUpdate);
+        if (success) HospitalServer.broadcast(Protocol.PUSH_REFRESH, out);
         return success ? ok("") : err("Patient not found or is discharged");
     }
 
@@ -156,6 +166,7 @@ public class ClientHandler implements Runnable {
         if (id < 0)
             return err("Invalid patient id");
         boolean success = fm.dischargePatient(id);
+        if (success) HospitalServer.broadcast(Protocol.PUSH_REFRESH, out);
         return success ? ok("") : err("Patient not found or already discharged");
     }
 
