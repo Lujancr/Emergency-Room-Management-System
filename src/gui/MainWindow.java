@@ -26,15 +26,52 @@ import java.util.List;
 public class MainWindow extends JFrame {
 
     // ── Colour palette ────────────────────────────────────────────────────
-    private static final Color CLR_HEADER_BG = new Color(173, 216, 230);
-    private static final Color CLR_SIDEBAR_BG = new Color(200, 225, 240);
-    private static final Color CLR_FIELD_BG = new Color(173, 216, 230);
-    private static final Color CLR_DISCHARGED = new Color(160, 160, 160);
-    private static final Color CLR_BTN = new Color(210, 210, 210);
-    private static final Font FONT_TITLE = new Font("SansSerif", Font.BOLD, 18);
-    private static final Font FONT_LABEL = new Font("SansSerif", Font.PLAIN, 13);
-    private static final Font FONT_PATIENT_ID = new Font("SansSerif", Font.BOLD, 13);
+    private static final Color CLR_HEADER_BG   = new Color(173, 216, 230);
+    private static final Color CLR_SIDEBAR_BG  = new Color(200, 225, 240);
+    private static final Color CLR_FIELD_BG    = new Color(173, 216, 230);
+    private static final Color CLR_DISCHARGED  = new Color(160, 160, 160);
+    private static final Color CLR_BTN         = new Color(210, 210, 210);
+    private static final Color CLR_FIELD_OK    = new Color(140, 180, 210);  // normal border
+    private static final Color CLR_FIELD_ERROR = new Color(200,  60,  60);  // invalid border
+    private static final Font FONT_TITLE      = new Font("SansSerif", Font.BOLD,  18);
+    private static final Font FONT_LABEL      = new Font("SansSerif", Font.PLAIN, 13);
+    private static final Font FONT_PATIENT_ID = new Font("SansSerif", Font.BOLD,  13);
     private static final Font FONT_PATIENT_NM = new Font("SansSerif", Font.PLAIN, 11);
+
+    // ── Validation regexes ────────────────────────────────────────────────
+    /**
+     * Full name: first + last, letters/spaces/hyphens/apostrophes/commas/periods.
+     * At least two whitespace-separated tokens are enforced separately.
+     */
+    private static final String RX_NAME     = "[A-Za-z][A-Za-z ,.'-]{1,99}";
+    /**
+     * Age: integer 1–150 (no leading zeros beyond "0" itself, but we keep it
+     * simple — the range check happens in validateFields()).
+     */
+    private static final String RX_AGE      = "\\d{1,3}";
+    /**
+     * Height: accepts common formats —
+     *   imperial:  5'11"  |  5' 11"  |  5'11  |  6'
+     *   metric:    180cm  |  180 cm  |  1.80m  |  180
+     *   decimal:   5.11
+     * The captured value is stored as a free-form string in the model.
+     */
+    private static final String RX_HEIGHT   =
+        "\\d{1,3}(['\"]\\s*\\d{0,2}['\"]?|\\s*(cm|m)|(\\.\\d{1,2})?)?";
+    /**
+     * Weight: positive decimal (e.g. 70, 70.5, 0.5).
+     * Range check (> 0) happens in validateFields().
+     */
+    private static final String RX_WEIGHT   = "\\d{1,4}(\\.\\d{1,2})?";
+    /**
+     * Condition: any printable text, 1–500 characters, not blank.
+     * Checked by non-emptiness + length, not a character-class regex.
+     */
+    // (no compile-time constant needed — checked inline)
+    /**
+     * Severity: single digit 1–4.
+     */
+    private static final String RX_SEVERITY = "[1-4]";
 
     // ── State ─────────────────────────────────────────────────────────────
     private final ServerConnection conn;
@@ -214,19 +251,29 @@ public class MainWindow extends JFrame {
         int row = 0;
 
         nameField = makeTextField();
+        attachValidator(nameField, RX_NAME);
         addFormRow(form, "Name:", nameField, lc, fc, row++);
+
         ageField = makeTextField();
+        attachValidator(ageField, RX_AGE);
         addFormRow(form, "Age:", ageField, lc, fc, row++);
+
         heightField = makeTextField();
+        attachValidator(heightField, RX_HEIGHT);
         addFormRow(form, "Height:", heightField, lc, fc, row++);
+
         weightField = makeTextField();
+        attachValidator(weightField, RX_WEIGHT);
         addFormRow(form, "Weight:", weightField, lc, fc, row++);
 
         conditionArea = makeTextArea(4);
-        addFormRow(form, "Condition:", scrolledArea(conditionArea), lc, fc, row++);
+        JScrollPane conditionScroll = scrolledArea(conditionArea);
+        attachAreaValidator(conditionArea, conditionScroll);
+        addFormRow(form, "Condition:", conditionScroll, lc, fc, row++);
 
         // Severity — narrow field, left-aligned
         severityField = makeTextField();
+        attachValidator(severityField, RX_SEVERITY);
         severityField.setPreferredSize(new Dimension(55, 26));
         GridBagConstraints sevfc = (GridBagConstraints) fc.clone();
         sevfc.fill = GridBagConstraints.NONE;
@@ -237,7 +284,9 @@ public class MainWindow extends JFrame {
         // Notes — doctor only
         if (isDoctor) {
             notesArea = makeTextArea(4);
-            addFormRow(form, "Notes:", scrolledArea(notesArea), lc, fc, row++);
+            JScrollPane notesScroll = scrolledArea(notesArea);
+            attachAreaValidator(notesArea, notesScroll);
+            addFormRow(form, "Notes:", notesScroll, lc, fc, row++);
         }
 
         // Vertical filler
@@ -462,42 +511,24 @@ public class MainWindow extends JFrame {
     // ═════════════════════════════════════════════════════════════════════
 
     private void performAction() {
-        // ── collect & validate ──
-        String name = nameField.getText().trim();
-        String ageStr = ageField.getText().trim();
-        String height = heightField.getText().trim();
-        String wtStr = weightField.getText().trim();
-        String cond = conditionArea.getText().trim();
-        String sevStr = severityField.getText().trim();
-        String notes = (notesArea != null) ? notesArea.getText().trim() : "";
+        // ── validate all fields via centralised regex rules ──
+        String error = validateFields();
+        if (error != null) {
+            showError(error);
+            return;
+        }
 
-        // Name: split into first/last (require at least two words)
+        // ── safe to parse after validation ──
+        String name      = nameField.getText().trim();
         String[] nameParts = name.split("\\s+", 2);
-        if (!name.matches("[A-Za-z ,.'-]{2,100}") || nameParts.length < 2) {
-            showError("Name must contain first and last name (letters only).");
-            return;
-        }
-        if (!ageStr.matches("\\d{1,3}")) {
-            showError("Age must be a number (1–3 digits).");
-            return;
-        }
-        if (!sevStr.matches("[1-4]")) {
-            showError("Severity must be a digit 1–4.");
-            return;
-        }
-
-        double weight;
-        try {
-            weight = Double.parseDouble(wtStr);
-        } catch (NumberFormatException ex) {
-            showError("Weight must be a number (e.g. 70.5).");
-            return;
-        }
-
         String firstName = nameParts[0];
-        String lastName = nameParts[1];
-        int age = Integer.parseInt(ageStr);
-        int severity = Integer.parseInt(sevStr);
+        String lastName  = nameParts[1];
+        int    age       = Integer.parseInt(ageField.getText().trim());
+        String height    = heightField.getText().trim();
+        double weight    = Double.parseDouble(weightField.getText().trim());
+        String cond      = conditionArea.getText().trim();
+        int    severity  = Integer.parseInt(severityField.getText().trim());
+        String notes     = (notesArea != null) ? notesArea.getText().trim() : "";
 
         if (currentPatient == null) {
             // ── Create new patient (nurse) ──
@@ -625,7 +656,7 @@ public class MainWindow extends JFrame {
         tf.setBackground(CLR_FIELD_BG);
         tf.setFont(FONT_LABEL);
         tf.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(140, 180, 210)),
+                BorderFactory.createLineBorder(CLR_FIELD_OK),
                 BorderFactory.createEmptyBorder(3, 5, 3, 5)));
         return tf;
     }
@@ -643,8 +674,106 @@ public class MainWindow extends JFrame {
         JScrollPane sp = new JScrollPane(ta,
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        sp.setBorder(BorderFactory.createLineBorder(new Color(140, 180, 210)));
+        sp.setBorder(BorderFactory.createLineBorder(CLR_FIELD_OK));
         return sp;
+    }
+
+    // ── Real-time validation helpers ──────────────────────────────────────
+
+    /**
+     * Attaches a DocumentListener to {@code field} that repaints the border
+     * red when the field's text does not match {@code regex}, and blue
+     * (normal) when it does.  Empty fields are shown as normal while the
+     * user hasn't typed yet — errors only surface once typing begins.
+     */
+    private void attachValidator(JTextField field, String regex) {
+        field.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e)  { recheck(); }
+            public void removeUpdate(DocumentEvent e)  { recheck(); }
+            public void changedUpdate(DocumentEvent e) { recheck(); }
+
+            private void recheck() {
+                String text = field.getText().trim();
+                boolean ok = text.isEmpty() || text.matches(regex);
+                Color border = ok ? CLR_FIELD_OK : CLR_FIELD_ERROR;
+                field.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(border),
+                        BorderFactory.createEmptyBorder(3, 5, 3, 5)));
+            }
+        });
+    }
+
+    /**
+     * Same as {@link #attachValidator} but watches a JTextArea and updates
+     * the enclosing JScrollPane's border instead.
+     * Rule: text must be 500 characters or fewer (blank is allowed while typing).
+     */
+    private void attachAreaValidator(JTextArea area, JScrollPane scroll) {
+        area.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e)  { recheck(); }
+            public void removeUpdate(DocumentEvent e)  { recheck(); }
+            public void changedUpdate(DocumentEvent e) { recheck(); }
+
+            private void recheck() {
+                String text = area.getText().trim();
+                boolean ok = text.isEmpty() || text.length() <= 500;
+                scroll.setBorder(BorderFactory.createLineBorder(
+                        ok ? CLR_FIELD_OK : CLR_FIELD_ERROR));
+            }
+        });
+    }
+
+    /**
+     * Validates all editable patient fields.
+     *
+     * @return an error message string, or {@code null} if everything is valid
+     */
+    private String validateFields() {
+        String name = nameField.getText().trim();
+        if (!name.matches(RX_NAME))
+            return "Name may only contain letters, spaces, hyphens, apostrophes, commas, and periods.";
+        if (name.split("\\s+").length < 2)
+            return "Name must include at least a first and last name.";
+
+        String ageStr = ageField.getText().trim();
+        if (!ageStr.matches(RX_AGE))
+            return "Age must be a whole number (e.g. 34).";
+        int age = Integer.parseInt(ageStr);
+        if (age < 1 || age > 150)
+            return "Age must be between 1 and 150.";
+
+        String height = heightField.getText().trim();
+        if (height.isEmpty())
+            return "Height is required (e.g. 5'11\" or 180 cm).";
+        if (!height.matches(RX_HEIGHT))
+            return "Height format not recognised. Use e.g. 5'11\", 180 cm, or 180.";
+        if (height.length() > 20)
+            return "Height value is too long (max 20 characters).";
+
+        String wtStr = weightField.getText().trim();
+        if (!wtStr.matches(RX_WEIGHT))
+            return "Weight must be a positive number (e.g. 70 or 70.5).";
+        double weight = Double.parseDouble(wtStr);
+        if (weight <= 0)
+            return "Weight must be greater than 0.";
+
+        String cond = conditionArea.getText().trim();
+        if (cond.isEmpty())
+            return "Condition cannot be blank.";
+        if (cond.length() > 500)
+            return "Condition must be 500 characters or fewer.";
+
+        String sevStr = severityField.getText().trim();
+        if (!sevStr.matches(RX_SEVERITY))
+            return "Severity must be a single digit: 1, 2, 3, or 4.";
+
+        if (notesArea != null) {
+            String notes = notesArea.getText().trim();
+            if (notes.length() > 500)
+                return "Notes must be 500 characters or fewer.";
+        }
+
+        return null; // all valid
     }
 
     private JButton makeButton(String text) {
