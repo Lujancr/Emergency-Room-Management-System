@@ -43,6 +43,10 @@ public class ServerConnection {
     // ── Push callback ─────────────────────────────────────────────────────
     private volatile Runnable onPushRefresh;
 
+    // ── Disconnect callback ───────────────────────────────────────────────
+    /** Invoked on the Swing EDT when the server closes the connection. */
+    private volatile Runnable onDisconnect;
+
     // ── I/O thread machinery ──────────────────────────────────────────────
     /** Callers put a Request here; the I/O thread drains it. */
     private final LinkedBlockingQueue<Request> requestQueue = new LinkedBlockingQueue<>();
@@ -89,13 +93,21 @@ public class ServerConnection {
         }
     }
 
-    // ── Push callback registration ────────────────────────────────────────
+    // ── Push / disconnect callback registration ───────────────────────────
     /**
      * Register a callback invoked on the Swing EDT whenever the server sends
      * PUSH_REFRESH. Call before showing MainWindow.
      */
     public void setOnPushRefresh(Runnable callback) {
         this.onPushRefresh = callback;
+    }
+
+    /**
+     * Register a callback invoked on the Swing EDT when the server closes
+     * the connection or the network is lost. Call before showing MainWindow.
+     */
+    public void setOnDisconnect(Runnable callback) {
+        this.onDisconnect = callback;
     }
 
     // ── Role helpers ──────────────────────────────────────────────────────
@@ -287,6 +299,7 @@ public class ServerConnection {
                 // Socket closed or network error — normal on disconnect
             } finally {
                 ioThreadActive = false;
+                dispatchDisconnect();
             }
         }, "ServerConnection-IO");
         ioThread.setDaemon(true);
@@ -296,6 +309,15 @@ public class ServerConnection {
     private void dispatchRefresh() {
         Runnable cb = onPushRefresh;
         if (cb != null) {
+            javax.swing.SwingUtilities.invokeLater(cb);
+        }
+    }
+
+    private void dispatchDisconnect() {
+        Runnable cb = onDisconnect;
+        if (cb != null) {
+            // Clear so it only fires once even if called from multiple paths
+            onDisconnect = null;
             javax.swing.SwingUtilities.invokeLater(cb);
         }
     }
