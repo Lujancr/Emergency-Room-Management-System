@@ -1,8 +1,8 @@
 package src.gui;
 
 import src.client.ServerConnection;
+import src.model.BillingEntry;
 import src.model.Patient;
-
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -16,33 +16,33 @@ import java.util.List;
  * for the selected patient, plus a total cost at the bottom.
  *
  * Wireframe reference: "Billing window for Nurses"
- *   ┌─────────────────────────────┐
- *   │      ID# Billing Info       │
- *   │  ┌───────────────────────┐  │
- *   │  │ Treatment Method #1   │  │
- *   │  │ Treatment Method #2   │  │  ← scrollable list (read-only)
- *   │  │        ...            │  │
- *   │  └───────────────────────┘  │
- *   │  Total Cost: $XXX.XX        │
- *   └─────────────────────────────┘
+ * ┌─────────────────────────────┐
+ * │ ID# Billing Info │
+ * │ ┌───────────────────────┐ │
+ * │ │ Treatment Method #1 │ │
+ * │ │ Treatment Method #2 │ │ ← scrollable list (read-only)
+ * │ │ ... │ │
+ * │ └───────────────────────┘ │
+ * │ Total Cost: $XXX.XX │
+ * └─────────────────────────────┘
  */
 public class NurseBillingDialog extends JDialog {
 
-    private static final Color CLR_BG      = new Color(173, 216, 230);
+    private static final Color CLR_BG = new Color(173, 216, 230);
     private static final Color CLR_LIST_BG = Color.WHITE;
-    private static final Font  FONT_TITLE  = new Font("SansSerif", Font.BOLD, 14);
-    private static final Font  FONT_ITEM   = new Font("SansSerif", Font.PLAIN, 13);
-    private static final Font  FONT_TOTAL  = new Font("SansSerif", Font.BOLD, 13);
+    private static final Font FONT_TITLE = new Font("SansSerif", Font.BOLD, 14);
+    private static final Font FONT_ITEM = new Font("SansSerif", Font.PLAIN, 13);
+    private static final Font FONT_TOTAL = new Font("SansSerif", Font.BOLD, 13);
 
     private final ServerConnection conn;
-    private final Patient          patient;
+    private final Patient patient;
 
     private DefaultListModel<String> listModel;
-    private JLabel                   totalLabel;
+    private JLabel totalLabel;
 
     public NurseBillingDialog(JFrame owner, ServerConnection conn, Patient patient) {
         super(owner, "Billing Info — Patient " + patient.getId(), true);
-        this.conn    = conn;
+        this.conn = conn;
         this.patient = patient;
 
         buildUI();
@@ -54,7 +54,7 @@ public class NurseBillingDialog extends JDialog {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    //  UI
+    // UI
     // ─────────────────────────────────────────────────────────────────────
 
     private void buildUI() {
@@ -73,7 +73,7 @@ public class NurseBillingDialog extends JDialog {
         treatmentList.setFont(FONT_ITEM);
         treatmentList.setBackground(CLR_LIST_BG);
         treatmentList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        treatmentList.setEnabled(false);                    // read-only for nurse
+        treatmentList.setEnabled(false); // read-only for nurse
         treatmentList.setFixedCellHeight(32);
 
         // Render items centered with borders between them
@@ -103,23 +103,24 @@ public class NurseBillingDialog extends JDialog {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    //  Data loading
+    // Data loading
     // ─────────────────────────────────────────────────────────────────────
 
     private void loadBillingData() {
-        SwingWorker<List<BillingItem>, Void> worker = new SwingWorker<>() {
+        SwingWorker<List<BillingEntry>, Void> worker = new SwingWorker<>() {
             @Override
-            protected List<BillingItem> doInBackground() throws Exception {
-                return conn.getBillingItems(patient.getId());
+            protected List<BillingEntry> doInBackground() throws Exception {
+                return conn.getBill(patient.getId());
             }
+
             @Override
             protected void done() {
                 try {
-                    List<BillingItem> items = get();
+                    List<BillingEntry> items = get();
                     listModel.clear();
                     double total = 0.0;
-                    for (BillingItem item : items) {
-                        listModel.addElement(item.getName());
+                    for (BillingEntry item : items) {
+                        listModel.addElement(item.getProcedureName());
                         total += item.getCost();
                     }
                     totalLabel.setText(String.format("Total Cost:  $%.2f", total));
