@@ -12,7 +12,7 @@ import src.shared.Protocol;
 /**
  * Client-side connection to HospitalServer.
  *
- * Threading model (fixes the push/response race condition):
+ * Threading model:
  *
  * One dedicated I/O thread owns the socket exclusively — it is the only
  * thread that ever calls in.readLine() or out.println(). All other threads
@@ -20,13 +20,13 @@ import src.shared.Protocol;
  * LinkedBlockingQueue and then block on a SynchronousQueue inside that
  * Request waiting for the response string to be handed back.
  *
- * When the I/O thread reads a line it checks whether it is a PUSH_REFRESH
- * (dispatches the refresh callback on the EDT) or a normal response
- * (hands it back to whichever Request is waiting).
+ * The I/O thread always reads from the socket. When no request is pending
+ * (idle), it reads any incoming lines and dispatches PUSH_REFRESH callbacks.
+ * When a request is in flight, it sends it and reads lines until it gets a
+ * non-push response, dispatching any PUSH_REFRESH lines along the way.
  *
- * Because only one thread touches the streams there is no race condition,
- * no synchronized keyword needed on individual methods, and no possibility
- * of the push listener stealing a response that send() was expecting.
+ * Because only one thread touches the streams there is no race condition
+ * between push messages and request/response pairs.
  */
 public class ServerConnection {
 
@@ -219,45 +219,67 @@ public class ServerConnection {
     /**
      * The single thread that owns the socket streams.
      *
-     * It loops doing two things in alternation:
-     * 1. Drain the requestQueue — send each request message to the server,
-     * then read exactly one response line and hand it back to the caller.
-     * 2. After handing back the response, do a non-blocking check for any
-     * further incoming lines (push messages that arrived while idle).
+     * FIX: The previous implementation only read from the socket when a
+     * request was in-flight. This meant PUSH_REFRESH messages that arrived
+     * while idle were never read, so real-time updates from other clients
+     * were silently dropped.
      *
-     * Because only this thread ever calls readLine(), there is no race
-     * between request/response and push messages.
+     * The fixed design uses socket.setSoTimeout() to make readLine() return
+     * periodically (SocketTimeoutException) so the thread can also check the
+     * requestQueue. This way:
+     * - Idle pushes are dispatched as soon as they arrive (within ~100 ms).
+     * - Requests are processed and their responses returned to callers.
      */
-    private void startIOThread() {
+    private void startIOThread() throws IOException {
+        // Allow readLine() to time out so we can interleave queue polling
+        socket.setSoTimeout(100);
         ioThreadActive = true;
+
         Thread ioThread = new Thread(() -> {
             try {
+                Request pendingReq = null;
+
                 while (!socket.isClosed()) {
-                    // ── Wait for a request from any caller ────────────────
-                    Request req = requestQueue.poll(100, TimeUnit.MILLISECONDS);
 
-                    if (req != null) {
-                        // Send the request
-                        out.println(req.message);
+                    // Try to read a line from the server (non-blocking-ish via timeout)
+                    String line = null;
+                    try {
+                        line = in.readLine();
+                    } catch (SocketTimeoutException ste) {
+                        // No data within timeout — fall through to check the queue
+                    }
 
-                        // Read lines until we get a non-push response
-                        String line;
-                        while ((line = in.readLine()) != null) {
-                            if (line.equals(Protocol.PUSH_REFRESH)) {
-                                dispatchRefresh();
-                                // Keep reading — our real response is still coming
-                            } else {
-                                // This is the response for req
-                                req.responseSlot.put(line);
-                                break;
+                    if (line == null && !socket.isClosed()) {
+                        // Timeout (no data yet) or server closed — check queue
+                        if (pendingReq == null) {
+                            pendingReq = requestQueue.poll();
+                            if (pendingReq != null) {
+                                out.println(pendingReq.message);
                             }
                         }
-                        if (line == null)
-                            break; // server closed connection
+                        continue;
                     }
-                    // No request pending — loop back and poll again.
-                    // Any PUSH_REFRESH that arrives while idle will be
-                    // picked up on the next pass through the poll timeout.
+
+                    if (line == null)
+                        break; // server closed connection
+
+                    // We got a line — is it a push or a response?
+                    if (line.equals(Protocol.PUSH_REFRESH)) {
+                        dispatchRefresh();
+                        // If a request is in flight, keep reading for its response
+                    } else {
+                        // It's a response to the pending request
+                        if (pendingReq != null) {
+                            pendingReq.responseSlot.put(line);
+                            pendingReq = null;
+                            // Immediately check for queued requests
+                            pendingReq = requestQueue.poll();
+                            if (pendingReq != null) {
+                                out.println(pendingReq.message);
+                            }
+                        }
+                        // (If no request was pending this is an unexpected line — ignore)
+                    }
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
