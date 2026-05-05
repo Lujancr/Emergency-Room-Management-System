@@ -13,10 +13,6 @@ import src.shared.Protocol;
 //interacts with the FileManager (model) to perform actions, and sends responses back to the client.
 //Each instance of ClientHandler runs on its own thread, allowing the server to handle multiple clients concurrently.
 
-/**
- * Handles all communication with a single connected client (doctor or nurse).
- * Runs on its own thread spawned by HospitalServer.
- */
 public class ClientHandler implements Runnable {
 
     private final Socket socket;
@@ -32,6 +28,8 @@ public class ClientHandler implements Runnable {
         this.socket = socket;
     }
 
+    // Main loop: read requests, handle them, and send responses until the client
+    // disconnects.
     @Override
     public void run() {
         System.out.println("[Server] Client connected: " + socket.getInetAddress());
@@ -48,7 +46,8 @@ public class ClientHandler implements Runnable {
         } catch (IOException e) {
             System.out.println("[Server] Client disconnected: " + socket.getInetAddress());
         } finally {
-            if (out != null) HospitalServer.unregisterClient(out);
+            if (out != null)
+                HospitalServer.unregisterClient(out);
             try {
                 socket.close();
             } catch (IOException ignored) {
@@ -56,7 +55,8 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    // ─── Request dispatcher ───────────────────────────────────────────────
+    // Parses the raw request string, determines the command, and calls the
+    // appropriate handler method.
     private String handleRequest(String raw) {
         if (raw.isEmpty())
             return err("Empty request");
@@ -71,6 +71,7 @@ public class ClientHandler implements Runnable {
         if (loggedInUser == null)
             return err("Not authenticated");
 
+        // Dispatch to command handlers
         switch (cmd) {
             case Protocol.GET_ALL_PATIENTS:
                 return handleGetAllPatients();
@@ -95,7 +96,8 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    // ─── AUTH ─────────────────────────────────────────────────────────────
+    // Handles the LOGIN command by authenticating the user and setting the
+    // loggedInUser field. Returns the user's role on success.
     private String handleLogin(String[] parts) {
         if (parts.length < 3)
             return err("LOGIN requires userId and password");
@@ -108,7 +110,9 @@ public class ClientHandler implements Runnable {
         return ok(role);
     }
 
-    // ─── PATIENT COMMANDS ─────────────────────────────────────────────────
+    // Handles the GET_ALL_PATIENTS command by retrieving all patients from the
+    // FileManager and returning them as a single string with rows separated by
+    // Protocol.ROW_SEP.
     private String handleGetAllPatients() {
         List<Patient> patients = fm.getAllPatients();
         StringBuilder sb = new StringBuilder();
@@ -120,6 +124,8 @@ public class ClientHandler implements Runnable {
         return ok(sb.toString());
     }
 
+    // Handles the GET_PATIENT command by retrieving a specific patient by ID and
+    // returning their data. Requires the patientId as an argument.
     private String handleGetPatient(String[] parts) {
         if (parts.length < 2)
             return err("GET_PATIENT requires patientId");
@@ -132,6 +138,9 @@ public class ClientHandler implements Runnable {
         return ok(p.toFileLine());
     }
 
+    // Handles the CREATE_PATIENT command by creating a new patient record from the
+    // provided data. Requires the patient data as an argument. Only nurses can
+    // create patients.
     private String handleCreatePatient(String[] parts) {
         if (loggedInUser.isDoctor())
             return err("Doctors cannot create patients");
@@ -145,6 +154,9 @@ public class ClientHandler implements Runnable {
         return ok(String.valueOf(newId));
     }
 
+    // Handles the UPDATE_PATIENT command by updating an existing patient record
+    // with the provided data. Requires the full patient data (including ID) as an
+    // argument. Nurses can update all fields except discharge status.
     private String handleUpdatePatient(String[] parts) {
         if (parts.length < 2)
             return err("UPDATE_PATIENT requires patient data");
@@ -153,10 +165,13 @@ public class ClientHandler implements Runnable {
             return err("Malformed patient data");
         boolean nurseUpdate = !loggedInUser.isDoctor();
         boolean success = fm.updatePatient(updated, nurseUpdate);
-        if (success) HospitalServer.broadcast(Protocol.PUSH_REFRESH, out);
+        if (success)
+            HospitalServer.broadcast(Protocol.PUSH_REFRESH, out);
         return success ? ok("") : err("Patient not found or is discharged");
     }
 
+    // Handles the DISCHARGE_PATIENT command by marking a patient as discharged.
+    // Requires the patientId as an argument. Only doctors can discharge patients.
     private String handleDischargePatient(String[] parts) {
         if (!loggedInUser.isDoctor())
             return err("Only doctors can discharge patients");
@@ -166,11 +181,13 @@ public class ClientHandler implements Runnable {
         if (id < 0)
             return err("Invalid patient id");
         boolean success = fm.dischargePatient(id);
-        if (success) HospitalServer.broadcast(Protocol.PUSH_REFRESH, out);
+        if (success)
+            HospitalServer.broadcast(Protocol.PUSH_REFRESH, out);
         return success ? ok("") : err("Patient not found or already discharged");
     }
 
-    // ─── BILLING COMMANDS ─────────────────────────────────────────────────
+    // Handles the GET_BILL command by retrieving the billing entries for a specific
+    // patient. Requires the patientId as an argument.
     private String handleGetBill(String[] parts) {
         if (parts.length < 2)
             return err("GET_BILL requires patientId");
@@ -187,6 +204,9 @@ public class ClientHandler implements Runnable {
         return ok(sb.toString());
     }
 
+    // Handles the ADD_BILL_ENTRY command by adding a new billing entry to a
+    // patient's bill. Requires the patientId, procedureName, and cost as arguments.
+    // Only doctors can add billing entries.
     private String handleAddBillEntry(String[] parts) {
         if (!loggedInUser.isDoctor())
             return err("Only doctors can add billing entries");
@@ -206,6 +226,9 @@ public class ClientHandler implements Runnable {
         return ok("");
     }
 
+    // Handles the DELETE_BILL_ENTRY command by removing a billing entry from a
+    // patient's bill. Requires the patientId, procedureName, and cost as arguments
+    // to identify the entry. Only doctors can delete billing entries.
     private String handleDeleteBillEntry(String[] parts) {
         if (!loggedInUser.isDoctor())
             return err("Only doctors can delete billing entries");
@@ -225,7 +248,8 @@ public class ClientHandler implements Runnable {
         return success ? ok("") : err("Billing entry not found");
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────
+    // Utility methods to format OK and ERROR responses, and to parse integers
+    // safely.
     private String ok(String data) {
         return data == null || data.isEmpty()
                 ? Protocol.OK

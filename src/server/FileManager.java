@@ -8,14 +8,11 @@ import src.model.BillingEntry;
 import src.model.Patient;
 import src.model.StaffUser;
 
-/**
- * Thread-safe file I/O manager for all persistent data.
- * Uses a single ReadWriteLock per logical file to allow concurrent reads
- * but exclusive writes.
- */
+/// Manages file I/O for patients, staff credentials, and billing data with
+/// thread-safe access.
 public class FileManager {
 
-    // ── File paths (relative to server working directory) ─────────────────
+    // File paths
     public static final String PATIENTS_FILE = "data/patients.txt";
     public static final String STAFF_FILE = "data/credentials.txt";
     public static final String BILLING_DIR = "data/billing/";
@@ -25,7 +22,7 @@ public class FileManager {
     // Per-patient billing locks keyed by patient id
     private final Map<Integer, ReentrantReadWriteLock> billingLocks = new HashMap<>();
 
-    // ── Singleton ──────────────────────────────────────────────────────────
+    // Singleton instance
     private static FileManager instance;
 
     private FileManager() {
@@ -40,10 +37,8 @@ public class FileManager {
         return instance;
     }
 
-    /**
-     * Warns at startup if expected data files are missing so the problem
-     * is obvious immediately rather than silently returning empty data.
-     */
+    // Verifies that the patients and staff files exist, and logs warnings if they
+    // don't. This helps catch setup issues early.
     private void verifyFilesExist() {
         if (!new File(PATIENTS_FILE).exists()) {
             System.err.println("[FileManager] WARNING: patients file not found at: " + PATIENTS_FILE);
@@ -57,10 +52,7 @@ public class FileManager {
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════
-    // STAFF
-    // ═════════════════════════════════════════════════════════════════════
-
+    // Staff authentication
     public StaffUser authenticateUser(String userId, String password) {
         staffLock.readLock().lock();
         try {
@@ -76,10 +68,7 @@ public class FileManager {
         return null;
     }
 
-    // ═════════════════════════════════════════════════════════════════════
-    // PATIENTS
-    // ═════════════════════════════════════════════════════════════════════
-
+    // Patient management
     public List<Patient> getAllPatients() {
         patientLock.readLock().lock();
         try {
@@ -95,6 +84,7 @@ public class FileManager {
         }
     }
 
+    // Retrieves a patient by ID. Returns null if not found.
     public Patient getPatient(int id) {
         patientLock.readLock().lock();
         try {
@@ -109,7 +99,9 @@ public class FileManager {
         return null;
     }
 
-    /** Creates a new patient; assigns next available ID. Returns assigned ID. */
+    // Creates a new patient record and returns the assigned patient ID. The patient
+    // object passed in should not have an ID set; the method will assign a new
+    // unique ID.
     public int createPatient(Patient patient) {
         patientLock.writeLock().lock();
         try {
@@ -135,12 +127,9 @@ public class FileManager {
         }
     }
 
-    /**
-     * Updates a patient record.
-     * If nurseUpdate=true, the doctorNotes field from the incoming patient is
-     * ignored;
-     * the existing doctorNotes value is preserved.
-     */
+    // Updates an existing patient record. Returns false if the patient was not
+    // found or is already discharged (locked). If nurseUpdate is true, doctor notes
+    // will be preserved and cannot be updated by this method.
     public boolean updatePatient(Patient updated, boolean nurseUpdate) {
         patientLock.writeLock().lock();
         try {
@@ -168,7 +157,10 @@ public class FileManager {
         }
     }
 
-    /** Sets severity=4, discharged=true. Returns false if already discharged. */
+    // Marks a patient as discharged. Returns false if the patient was not found or
+    // is already discharged.
+    // Discharging a patient is irreversible and locks the record from further
+    // edits. This method sets severity to 4 (least severe) and discharged to true.
     public boolean dischargePatient(int id) {
         patientLock.writeLock().lock();
         try {
@@ -194,10 +186,7 @@ public class FileManager {
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════
-    // BILLING
-    // ═════════════════════════════════════════════════════════════════════
-
+    // Billing management
     private String billingFilePath(int patientId) {
         return BILLING_DIR + "billing_" + patientId + ".txt";
     }
@@ -206,6 +195,8 @@ public class FileManager {
         return billingLocks.computeIfAbsent(patientId, k -> new ReentrantReadWriteLock());
     }
 
+    // Retrieves the billing entries for a specific patient. Returns an empty list
+    // if no billing file exists for the patient.
     public List<BillingEntry> getBill(int patientId) {
         ReentrantReadWriteLock lock = getBillingLock(patientId);
         lock.readLock().lock();
@@ -225,6 +216,8 @@ public class FileManager {
         }
     }
 
+    // Adds a billing entry to a patient's bill. This method appends the new entry
+    // to the patient's billing file, creating it if it doesn't exist.
     public void addBillingEntry(int patientId, BillingEntry entry) {
         ReentrantReadWriteLock lock = getBillingLock(patientId);
         lock.writeLock().lock();
@@ -238,7 +231,9 @@ public class FileManager {
         }
     }
 
-    /** Removes the first matching entry (by procedureName AND cost). */
+    // Deletes a billing entry from a patient's bill. This method searches for an
+    // entry matching the procedure name and cost, and removes it if found. Returns
+    // true if an entry was deleted, or false if no matching entry was found.
     public boolean deleteBillingEntry(int patientId, String procedureName, double cost) {
         ReentrantReadWriteLock lock = getBillingLock(patientId);
         lock.writeLock().lock();
@@ -262,10 +257,9 @@ public class FileManager {
         return false;
     }
 
-    // ═════════════════════════════════════════════════════════════════════
-    // Helpers
-    // ═════════════════════════════════════════════════════════════════════
-
+    // Utility methods to read and write lines from a file. readLines returns a list
+    // of non-empty trimmed lines, while writeLines overwrites the file with the
+    // provided lines.
     private List<String> readLines(String filePath) {
         List<String> lines = new ArrayList<>();
         File f = new File(filePath);
@@ -284,6 +278,9 @@ public class FileManager {
         return lines;
     }
 
+    // Utility method to write lines to a file. This method overwrites the existing
+    // file content with the provided lines. Each line is written on a new line in
+    // the file.
     private void writeLines(String filePath, List<String> lines) {
         try (PrintWriter pw = new PrintWriter(new FileWriter(filePath, false))) {
             for (String line : lines)

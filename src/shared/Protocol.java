@@ -1,5 +1,7 @@
 package src.shared;
 
+// Protocol constants for client-server communication. This class defines the command strings and other protocol-related constants used in the communication between the client and server. 
+// It serves as a single source of truth for the protocol, making it easier to maintain and update as needed. The constants are public and static, allowing them to be accessed from anywhere in the code without needing an instance of the Protocol class.
 public class Protocol {
     public static final String LOGIN = "LOGIN";
     public static final String GET_ALL_PATIENTS = "GET_ALL_PATIENTS";
@@ -17,7 +19,8 @@ public class Protocol {
     public static final String OK = "OK";
     public static final String ERROR = "ERROR";
     public static final String SEP = "\t"; // field separator in protocol messages
-    public static final String ROW_SEP = "~~"; // must not be newline — readLine() strips it // row separator inside data payloads
+    public static final String ROW_SEP = "~~"; // must not be newline — readLine() strips it // row separator inside
+                                               // data payloads
 
     // Role strings returned on successful login
     public static final String ROLE_DOCTOR = "DOCTOR";

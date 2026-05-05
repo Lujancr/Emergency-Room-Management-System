@@ -2,16 +2,14 @@ package src.shared;
 
 import java.util.*;
 
-/**
- * Hardcoded catalogue of available procedures and their costs.
- * This is the single source of truth used by both the billing window
- * (to display options) and the server (for validation if desired).
- *
- * Add/remove entries here to update the available billing options.
- */
+// Catalog of medical procedures and their costs. This is a static utility class
+// that provides read-only access to the procedure data. The catalog is immutable
+// and thread-safe, as it is initialized once and never modified thereafter.
 public class ProcedureCatalog {
 
-    /** Immutable map: procedure name → cost */
+    // Static map of procedure names to their costs. LinkedHashMap is used to
+    // preserve insertion order for display purposes. The map is wrapped in
+    // Collections.unmodifiableMap to prevent modification after initialization.
     private static final Map<String, Double> CATALOG;
 
     static {
@@ -39,22 +37,31 @@ public class ProcedureCatalog {
         CATALOG = Collections.unmodifiableMap(m);
     }
 
-    /** Returns the full catalog as an unmodifiable map. */
+    // Returns an unmodifiable view of the procedure catalog. The keys are procedure
+    // names and the values are their costs. This allows clients to read the catalog
+    // without risking modification. The catalog is immutable and thread-safe, so it
+    // can be safely shared across threads without synchronization
     public static Map<String, Double> getCatalog() {
         return CATALOG;
     }
 
-    /** Returns a list of procedure names in display order. */
+    // Returns a list of all procedure names in the catalog. This is a convenience
+    // method for clients that only need the names. The list is a new ArrayList to
+    // prevent modification of the underlying catalog keys.
     public static List<String> getProcedureNames() {
         return new ArrayList<>(CATALOG.keySet());
     }
 
-    /** Returns the cost for a procedure, or 0.0 if not found. */
+    // Returns the cost of a procedure by name. If the procedure does not exist,
+    // returns 0.0. This method provides a simple way to look up costs without
+    // exposing the entire catalog.
     public static double getCost(String procedureName) {
         return CATALOG.getOrDefault(procedureName, 0.0);
     }
 
-    /** Returns a formatted display string: "Procedure Name — $1,200.00" */
+    // Returns a formatted string for display purposes, showing the procedure name
+    // and its cost. This is a convenience method for clients that want to display
+    // the procedure information in a user-friendly format.
     public static String displayString(String procedureName) {
         double cost = getCost(procedureName);
         return String.format("%s — $%,.2f", procedureName, cost);
