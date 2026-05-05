@@ -1,0 +1,177 @@
+@startuml ER_System_Architecture
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+skinparam class {
+  BackgroundColor #F4F8FB
+  BorderColor #0D2B55
+  HeaderBackgroundColor #0D2B55
+  HeaderFontColor #FFFFFF
+}
+
+skinparam package {
+  BorderColor #0A7EA4
+  FontStyle bold
+}
+
+package "src.shared" {
+  class Protocol <<constants>> {
+    LOGIN, GET_ALL_PATIENTS, GET_PATIENT
+    CREATE_PATIENT, UPDATE_PATIENT
+    DISCHARGE_PATIENT, GET_BILL
+    ADD_BILL_ENTRY, DELETE_BILL_ENTRY
+    PING, PUSH_REFRESH, OK, ERROR
+  }
+  class ProcedureCatalog <<utility>> {
+    +getCatalog() : Map<String, Double>
+    +getCost(name) : double
+  }
+}
+
+package "src.model" {
+  class Patient {
+    id, name, age, height, weight
+    ssn, condition, severity, notes
+    discharged
+    --
+    +toFileLine()
+    +fromFileLine()  <<Factory>>
+    +createNew()     <<Factory>>
+  }
+  class StaffUser {
+    userId, password, isDoctor
+    --
+    +fromFileLine()  <<Factory>>
+  }
+  class BillingEntry {
+    procedureName, cost
+    --
+    +toFileLine()
+    +fromFileLine()  <<Factory>>
+  }
+}
+
+package "src.server" {
+  class HospitalServer <<Singleton>> {
+    port, clients: Set<PrintWriter>
+    --
+    +getInstance()
+    +broadcast(msg, sender)
+    +main()
+  }
+  class ClientHandler <<Runnable>> {
+    socket, loggedInUser
+    --
+    +run()
+    -handleRequest()
+    -handleLogin/GetPatient/
+     CreatePatient/UpdatePatient/
+     DischargePatient/GetBill/
+     AddBillEntry/DeleteBillEntry()
+  }
+  class FileManager <<Singleton>> {
+    patientLock, staffLock
+    billingLocks: Map<id, RWLock>
+    --
+    +getInstance()
+    +authenticateUser()
+    +getAllPatients() / getPatient()
+    +createPatient() / updatePatient()
+    +dischargePatient()
+    +getBill() / addBillingEntry()
+    +deleteBillingEntry()
+  }
+}
+
+package "src.client" {
+  class ServerConnection {
+    host, port, socket, role
+    requestQueue: LinkedBlockingQueue
+    --
+    +connect() / disconnect()
+    +login()
+    +getAllPatients() / getPatient()
+    +createPatient() / updatePatient()
+    +dischargePatient()
+    +getBill() / addBillEntry()
+    +deleteBillEntry()
+    +ping()
+    -send()  [via I/O thread]
+  }
+}
+
+package "src.gui" {
+  class LoginFrame <<JFrame>> {
+    serverIpField, userIdField
+    passwordField
+    --
+    -performLogin()
+  }
+  class MainWindow <<JFrame>> {
+    conn, isDoctor, currentPatient
+    --
+    +refreshPatientList()  [SwingWorker]
+    -performAction()
+    -dischargeCurrentPatient()
+    -validateFields()  [regex]
+    -startHeartbeat()
+  }
+  class DoctorBillingDialog <<JDialog>> {
+    catalog, billItems
+    --
+    -loadBill()
+    -updateBill()
+  }
+  class NurseBillingDialog <<JDialog>> {
+    --
+    -loadBillingData()  [read-only]
+  }
+}
+
+package "data/" <<File Storage>> {
+  class "patients.txt" as PF <<flat file>>
+  class "credentials.txt" as CF <<flat file>>
+  class "billing/billing_<id>.txt" as BF <<flat file>>
+}
+
+' Server
+HospitalServer *-- ClientHandler : spawns (pool of 20)
+ClientHandler --> FileManager : uses
+ClientHandler --> HospitalServer : broadcast()
+
+' File I/O
+FileManager --> PF : read/write
+FileManager --> CF : read
+FileManager --> BF : read/write
+
+' Client → GUI
+LoginFrame --> ServerConnection : creates
+LoginFrame --> MainWindow : opens
+MainWindow --> ServerConnection : uses
+MainWindow --> DoctorBillingDialog : opens (doctor)
+MainWindow --> NurseBillingDialog : opens (nurse)
+DoctorBillingDialog --> ProcedureCatalog : reads
+DoctorBillingDialog --> ServerConnection : uses
+NurseBillingDialog --> ServerConnection : uses
+
+' Network
+ServerConnection ..> HospitalServer : TCP :2620
+
+' Shared model
+ClientHandler ..> Patient : parse/serialize
+ClientHandler ..> BillingEntry : parse/serialize
+ClientHandler ..> StaffUser : authenticate
+FileManager ..> Patient : construct
+FileManager ..> BillingEntry : construct
+FileManager ..> StaffUser : construct
+ServerConnection ..> Patient : parse/serialize
+ServerConnection ..> BillingEntry : parse/serialize
+ServerConnection ..> Protocol : commands
+ClientHandler ..> Protocol : commands
+
+@enduml
