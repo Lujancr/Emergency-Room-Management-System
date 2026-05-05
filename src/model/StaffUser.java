@@ -1,14 +1,13 @@
 package src.model;
-
 import java.io.Serializable;
-
 //This object can be converted into a byte stream and saved or transferred.
 public class StaffUser implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String userId;
     private String password;
-    private boolean isDoctor; // true = Doctor, false = Nurse
+// true = Doctor, false = Nurse
+    private boolean isDoctor; 
 
     public StaffUser(String userId, String password, boolean isDoctor) {
         this.userId = userId;
@@ -28,10 +27,8 @@ public class StaffUser implements Serializable {
         return isDoctor;
     }
 
-    /**
-     * Serialize to pipe-delimited line for staff.txt
-     * Format: userId|password|isDoctor
-     */
+    /* Serialize to pipe-delimited line for staff.txt
+     * Format: userId|password|isDoctor*/
     public String toFileLine() {
         return userId + "|" + password + "|" + isDoctor;
     }

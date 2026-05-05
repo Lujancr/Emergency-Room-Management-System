@@ -1,13 +1,13 @@
 package src.model;
-
-/*
-
-*/
 import java.io.Serializable;
-
+/*
+Patient records in the hospital system
+stores personal information, medical condition details
+doc notes and discharge status
+*/
 public class Patient implements Serializable {
     private static final long serialVersionUID = 1L;
-
+//Patient info
     private int id;
     private String firstName;
     private String lastName;
@@ -16,10 +16,11 @@ public class Patient implements Serializable {
     private double weight;
     private String ssn;
     private String condition;
-    private int severity; // 1-3 (nurse), 4 = discharged (doctor-only action)
+    // 1-3 (nurse), 4 = discharged (doctor-only action)
     private String doctorNotes;
+    private int severity; 
     private boolean discharged;
-
+//constructs a complete patient object with all required patient data
     public Patient(int id, String firstName, String lastName, int age,
             String height, double weight, String ssn,
             String condition, int severity, String doctorNotes, boolean discharged) {
@@ -36,7 +37,7 @@ public class Patient implements Serializable {
         this.discharged = discharged;
     }
 
-    // Getters
+// Getters
     public int getId() {
         return id;
     }
@@ -85,7 +86,7 @@ public class Patient implements Serializable {
         return discharged;
     }
 
-    // Setters
+// Setters
     public void setFirstName(String firstName) {
         this.firstName = firstName;
     }
@@ -126,14 +127,14 @@ public class Patient implements Serializable {
         this.discharged = discharged;
     }
 
-    // Method to convert a Patient object to a line for patients.txt
+// Method to convert a Patient object to a line for patients.txt
     public String toFileLine() {
         return id + "|" + firstName + "|" + lastName + "|" + age + "|" + height + "|"
                 + weight + "|" + ssn + "|" + condition.replace("|", ";;") + "|"
                 + severity + "|" + doctorNotes.replace("|", ";;") + "|" + discharged;
     }
 
-    // Factory method 1: rebuilds a Patient from a saved line in patients.txt
+// Factory method 1: rebuilds a Patient from a saved line in patients.txt
     public static Patient fromFileLine(String line) {
         String[] parts = line.split("\\|", 11);
         if (parts.length < 11)
@@ -152,9 +153,9 @@ public class Patient implements Serializable {
         return new Patient(id, firstName, lastName, age, height, weight, ssn, condition, severity, notes, discharged);
     }
 
-    // Factory method 2: creates a blank new patient with safe defaults.
-    // Used when a nurse opens the New Patient tab — ID is 0 until FileManager
-    // assigns one.
+/*  Factory method 2: creates a blank new patient with safe defaults.
+Used when a nurse opens the New Patient tab — ID is 0 until FileManager
+assigns one.*/
     public static Patient createNew(String firstName, String lastName) {
         return new Patient(0, firstName, lastName, 0, "", 0.0, "", "", 1, "", false);
     }
