@@ -12,32 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * DoctorBillingDialog — editable billing popup for doctors.
- *
- * Top panel  : scrollable catalogue of all available procedures.
- *              Click a procedure to add it to the bill.
- *              Hovering shows the price as a tooltip.
- * Bottom panel: the patient's current bill.
- *              Select an item and press "Delete Cost" to remove it.
- * "Update Bill" sends the full bill to the server.
- *
- *   ┌──────────────────────────────────────────┐
- *   │       ID# XXXX  Billing Info             │
- *   │  ┌────────────────────────────────────┐  │
- *   │  │ General Consultation — $150.00     │  │  ← catalogue (click to add)
- *   │  │ Blood Test — $200.00               │  │
- *   │  │         ...                        │  │
- *   │  └────────────────────────────────────┘  │
- *   │             Bill                         │
- *   │  ┌────────────────────────────────────┐  │
- *   │  │ General Consultation               │  │  ← selected items
- *   │  └────────────────────────────────────┘  │
- *   │  [ Update Bill ]   [ Delete Cost ]       │
- *   └──────────────────────────────────────────┘
- */
 public class DoctorBillingDialog extends JDialog {
 
+    // Custom colors and fonts for styling the billing popup
     private static final Color CLR_BG      = new Color(173, 216, 230);
     private static final Color CLR_LIST_BG = Color.WHITE;
     private static final Color CLR_SEL_BG  = new Color(173, 216, 230);
@@ -46,21 +23,24 @@ public class DoctorBillingDialog extends JDialog {
     private static final Font  FONT_ITEM   = new Font("SansSerif", Font.PLAIN, 13);
     private static final Font  FONT_BTN    = new Font("SansSerif", Font.PLAIN, 13);
 
+    // References to server connection and patient data for loading billing info
     private final ServerConnection conn;
-    private final Patient          patient;
+    private final Patient patient;
 
-    /** All available procedures (name → cost). */
+    // Catalog data for displaying available procedures and their costs
     private final Map<String, Double> catalog = ProcedureCatalog.getCatalog();
-    private final List<String>        catalogNames = ProcedureCatalog.getProcedureNames();
+    private final List<String> catalogNames = ProcedureCatalog.getProcedureNames();
 
-    /** Items on the patient's bill currently being edited. */
+    // List of billing entries currently in the bill
     private final List<BillingEntry> billItems = new ArrayList<>();
 
+    // UI components for displaying the catalog and bill lists
     private DefaultListModel<String> catalogModel;
     private DefaultListModel<String> billModel;
-    private JList<String>            catalogList;
-    private JList<String>            billList;
+    private JList<String> catalogList;
+    private JList<String> billList;
 
+    // Constructor method that sets up the billing dialog with patient info and server connection
     public DoctorBillingDialog(JFrame owner, ServerConnection conn, Patient patient) {
         super(owner, "Billing Info — Patient " + patient.getId(), true);
         this.conn    = conn;
@@ -74,22 +54,17 @@ public class DoctorBillingDialog extends JDialog {
         loadBill();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    //  UI
-    // ─────────────────────────────────────────────────────────────────────
-
+    // Method that creates the UI components and arranges them in the dialog
     private void buildUI() {
         JPanel main = new JPanel(new BorderLayout(10, 12));
         main.setBackground(CLR_BG);
         main.setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
 
-        // Title
         JLabel title = new JLabel("ID# " + patient.getId() + "  Billing Info",
                 SwingConstants.CENTER);
         title.setFont(FONT_TITLE);
         main.add(title, BorderLayout.NORTH);
 
-        // Two list panels stacked
         JPanel centre = new JPanel(new GridLayout(2, 1, 0, 12));
         centre.setOpaque(false);
         centre.add(buildCataloguePanel());
@@ -100,6 +75,7 @@ public class DoctorBillingDialog extends JDialog {
         setContentPane(main);
     }
 
+    // Method that creates the catalog panel with a list of available procedures and their costs
     private JPanel buildCataloguePanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 4));
         panel.setOpaque(false);
@@ -117,7 +93,6 @@ public class DoctorBillingDialog extends JDialog {
         catalogList.setFixedCellHeight(34);
         catalogList.setCellRenderer(centeredRenderer());
 
-        // Tooltip shows just the price when hovering
         catalogList.addMouseMotionListener(new MouseMotionAdapter() {
             @Override public void mouseMoved(MouseEvent e) {
                 int idx = catalogList.locationToIndex(e.getPoint());
@@ -131,7 +106,6 @@ public class DoctorBillingDialog extends JDialog {
             }
         });
 
-        // Single-click adds to bill
         catalogList.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 int idx = catalogList.locationToIndex(e.getPoint());
@@ -152,6 +126,7 @@ public class DoctorBillingDialog extends JDialog {
         return panel;
     }
 
+    // Method that creates the bill panel with a list of treatments currently in the patient's bill
     private JPanel buildBillPanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 4));
         panel.setOpaque(false);
@@ -178,6 +153,7 @@ public class DoctorBillingDialog extends JDialog {
         return panel;
     }
 
+    // Method that creates the button bar with "Update Bill" and "Delete Cost" buttons and their associated actions
     private JPanel buildButtonBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         bar.setOpaque(false);
@@ -199,10 +175,7 @@ public class DoctorBillingDialog extends JDialog {
         return bar;
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    //  Data loading
-    // ─────────────────────────────────────────────────────────────────────
-
+    // Method to load billing data from the server in a background thread and update the UI when done
     private void loadBill() {
         SwingWorker<List<BillingEntry>, Void> worker = new SwingWorker<>() {
             @Override protected List<BillingEntry> doInBackground() throws Exception {
@@ -227,15 +200,13 @@ public class DoctorBillingDialog extends JDialog {
         worker.execute();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    //  Actions
-    // ─────────────────────────────────────────────────────────────────────
-
+    // Method that adds a new billing entry to the bill list and updates the UI
     private void addToBill(BillingEntry entry) {
         billItems.add(entry);
         billModel.addElement(entry.getProcedureName());
     }
 
+    // Method that deletes the selected billing entry from the bill list and updates the UI
     private void deleteSelectedCost() {
         int idx = billList.getSelectedIndex();
         if (idx < 0) {
@@ -247,7 +218,6 @@ public class DoctorBillingDialog extends JDialog {
         BillingEntry removed = billItems.remove(idx);
         billModel.remove(idx);
 
-        // Optimistically tell the server right away (removed from UI already)
         SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
             @Override protected Boolean doInBackground() throws Exception {
                 return conn.deleteBillEntry(patient.getId(),
@@ -266,12 +236,8 @@ public class DoctorBillingDialog extends JDialog {
         worker.execute();
     }
 
-    /**
-     * Sends every item currently in {@code billItems} to the server by
-     * adding any that are new (optimistic: clears and re-adds everything).
-     */
+    // Method that sends the updated bill to the server in a background thread and shows a success or error message when done
     private void updateBill() {
-        // Take a snapshot to avoid concurrency issues
         List<BillingEntry> snapshot = new ArrayList<>(billItems);
 
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
@@ -297,10 +263,7 @@ public class DoctorBillingDialog extends JDialog {
         worker.execute();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    //  Helpers
-    // ─────────────────────────────────────────────────────────────────────
-
+    // Method that creates a custom cell renderer to display list items centered with borders between them
     private ListCellRenderer<String> centeredRenderer() {
         return (list, value, index, isSelected, cellHasFocus) -> {
             JLabel lbl = new JLabel(value, SwingConstants.CENTER);
@@ -313,6 +276,7 @@ public class DoctorBillingDialog extends JDialog {
         };
     }
 
+    // Method to show an error message dialog with the given message
     private void showError(String msg) {
         JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);
     }

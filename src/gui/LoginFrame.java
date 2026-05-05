@@ -6,29 +6,27 @@ import src.shared.Protocol;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * Login window. Entry point for the Swing application.
- * On successful login opens the appropriate MainWindow (Doctor or Nurse).
- *
- * Usage: java src.gui.LoginFrame
- */
 public class LoginFrame extends JFrame {
 
     // Default port must match HospitalServer.DEFAULT_PORT (2620)
     private static final int DEFAULT_PORT = 2620;
+    // IP Address must match the server's IP or 'localhost'
     private static final String DEFAULT_HOST = "localhost";
 
+    // Custom colors and fonts for styling the login UI
     private static final Color CLR_BG = new Color(173, 216, 230);
     private static final Color CLR_FIELD = new Color(210, 230, 245);
     private static final Font FONT_TITLE = new Font("SansSerif", Font.BOLD, 16);
     private static final Font FONT_LABEL = new Font("SansSerif", Font.PLAIN, 13);
 
+    // UI components for the login form
     private JTextField serverIpField;
     private JTextField userIdField;
     private JPasswordField passwordField;
     private JButton loginButton;
     private JLabel statusLabel;
 
+    // Constructor method that sets up the login frame
     public LoginFrame() {
         setTitle("Hospital Management System — Login");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -38,6 +36,7 @@ public class LoginFrame extends JFrame {
         buildUI();
     }
 
+    // Method that creates the UI components and arranges them in the frame
     private void buildUI() {
         JPanel main = new JPanel(new BorderLayout(10, 10));
         main.setBackground(CLR_BG);
@@ -48,7 +47,6 @@ public class LoginFrame extends JFrame {
         title.setForeground(new Color(30, 70, 110));
         main.add(title, BorderLayout.NORTH);
 
-        // Form — 3 rows: Server IP, User ID, Password
         JPanel form = new JPanel(new GridLayout(3, 2, 8, 10));
         form.setOpaque(false);
 
@@ -90,6 +88,7 @@ public class LoginFrame extends JFrame {
         setContentPane(main);
     }
 
+    // Method that handles the login process
     private void performLogin() {
         String serverIp = serverIpField.getText().trim();
         String userId = userIdField.getText().trim();
@@ -148,18 +147,21 @@ public class LoginFrame extends JFrame {
         worker.execute();
     }
 
+    // Method to create a label
     private JLabel makeLabel(String text) {
         JLabel l = new JLabel(text);
         l.setFont(FONT_LABEL);
         return l;
     }
 
+    // Method to create a text field
     private JTextField makeTextField() {
         JTextField tf = new JTextField();
         styleField(tf);
         return tf;
     }
 
+    // Method to apply consistent styling to text fields
     private void styleField(JTextField tf) {
         tf.setBackground(CLR_FIELD);
         tf.setFont(FONT_LABEL);
@@ -168,6 +170,7 @@ public class LoginFrame extends JFrame {
                 BorderFactory.createEmptyBorder(3, 5, 3, 5)));
     }
 
+    // Main method to launch the program and display the login frame
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
     }
