@@ -1,0 +1,59 @@
+# ── Compiled Java ──────────────────────────────────────────────
+*.class
+*.jar
+*.war
+*.ear
+
+# ── Build output directories ────────────────────────────────────
+bin/
+out/
+build/
+dist/
+target/
+
+# ── Runtime data files ──────────────────────────────────────────
+# Flat files written by FileManager at runtime — do not commit
+data/patients.txt
+data/credentials.txt
+data/billing/
+
+# ── IDE — IntelliJ IDEA ─────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# ── IDE — Eclipse ───────────────────────────────────────────────
+.classpath
+.project
+.settings/
+*.launch
+
+# ── IDE — VS Code ───────────────────────────────────────────────
+.vscode/
+
+# ── IDE — NetBeans ──────────────────────────────────────────────
+nbproject/
+nbbuild/
+nbdist/
+nb-configuration.xml
+
+# ── macOS ───────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── Windows ─────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── Linux ───────────────────────────────────────────────────────
+*~
+
+# ── Logs ────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Test output ─────────────────────────────────────────────────
+test-output/
