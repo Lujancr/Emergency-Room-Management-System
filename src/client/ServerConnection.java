@@ -11,9 +11,6 @@ import src.shared.Protocol;
 
 /**
  * Client-side connection to HospitalServer.
- *
- * Threading model:
- *
  * One dedicated I/O thread owns the socket exclusively — it is the only
  * thread that ever calls in.readLine() or out.println(). All other threads
  * (EDT, SwingWorkers, heartbeat) submit a Request object to a
@@ -30,54 +27,44 @@ import src.shared.Protocol;
  */
 public class ServerConnection {
 
-    // ── Connection fields ─────────────────────────────────────────────────
+//Connection fields
     private final String host;
     private final int port;
     private Socket socket;
     private BufferedReader in;
     private PrintWriter out;
 
-    // ── Populated on successful login ─────────────────────────────────────
+//Populated on successful login
     private String role;
-
-    // ── Push callback ─────────────────────────────────────────────────────
+//Push callback 
     private volatile Runnable onPushRefresh;
-
-    // ── Disconnect callback ───────────────────────────────────────────────
-    /** Invoked on the Swing EDT when the server closes the connection. */
+//Disconnect callback
+/** Invoked on the Swing EDT when the server closes the connection. */
     private volatile Runnable onDisconnect;
 
-    // ── I/O thread machinery ──────────────────────────────────────────────
-    /** Callers put a Request here; the I/O thread drains it. */
+//I/O thread machinery
+/* Callers put a Request here; the I/O thread drains it. */
     private final LinkedBlockingQueue<Request> requestQueue = new LinkedBlockingQueue<>();
 
-    /** Set to true once the I/O thread is running. */
+/* Set to true once the I/O thread is running. */
     private volatile boolean ioThreadActive = false;
-
-    /**
-     * A single request/response pair. The caller blocks on responseSlot.take()
-     * until the I/O thread puts the server's reply in.
-     */
     private static class Request {
         final String message;
         final SynchronousQueue<String> responseSlot = new SynchronousQueue<>();
-
         Request(String message) {
             this.message = message;
         }
     }
 
-    // ── Constructor ───────────────────────────────────────────────────────
+//Constructor
     public ServerConnection(String host, int port) {
         this.host = host;
         this.port = port;
     }
-
-    // ── Connection lifecycle ──────────────────────────────────────────────
-    /**
-     * Opens the socket and starts the I/O thread.
-     * Must be called before any other method.
-     */
+// Connection lifecycle 
+/**
+* Opens the socket and starts the I/O thread.
+* Must be called before any other method.*/
     public void connect() throws IOException {
         socket = new Socket(host, port);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -93,11 +80,7 @@ public class ServerConnection {
         }
     }
 
-    // ── Push / disconnect callback registration ───────────────────────────
-    /**
-     * Register a callback invoked on the Swing EDT whenever the server sends
-     * PUSH_REFRESH. Call before showing MainWindow.
-     */
+//Push disconnect callback registration
     public void setOnPushRefresh(Runnable callback) {
         this.onPushRefresh = callback;
     }
@@ -110,8 +93,8 @@ public class ServerConnection {
         this.onDisconnect = callback;
     }
 
-    // ── Role helpers ──────────────────────────────────────────────────────
-    public boolean isDoctor() {
+//helpers
+        public boolean isDoctor() {
         return Protocol.ROLE_DOCTOR.equals(role);
     }
 
@@ -123,7 +106,7 @@ public class ServerConnection {
         return role;
     }
 
-    // ── Auth ──────────────────────────────────────────────────────────────
+//Auth
     public boolean login(String userId, String password) throws IOException {
         String response = send(Protocol.LOGIN + Protocol.SEP + userId + Protocol.SEP + password);
         if (isOk(response)) {
@@ -132,8 +115,7 @@ public class ServerConnection {
         }
         return false;
     }
-
-    // ── Patients ──────────────────────────────────────────────────────────
+//Patients
     public List<Patient> getAllPatients() throws IOException {
         String response = send(Protocol.GET_ALL_PATIENTS);
         List<Patient> list = new ArrayList<>();
@@ -149,14 +131,12 @@ public class ServerConnection {
         }
         return list;
     }
-
     public Patient getPatient(int id) throws IOException {
         String response = send(Protocol.GET_PATIENT + Protocol.SEP + id);
         if (isOk(response))
             return Patient.fromFileLine(dataOf(response));
         return null;
     }
-
     public int createPatient(Patient patient) throws IOException {
         String response = send(Protocol.CREATE_PATIENT + Protocol.SEP + patient.toFileLine());
         if (isOk(response)) {
@@ -168,7 +148,6 @@ public class ServerConnection {
         }
         return -1;
     }
-
     public boolean updatePatient(Patient patient) throws IOException {
         String response = send(Protocol.UPDATE_PATIENT + Protocol.SEP + patient.toFileLine());
         return isOk(response);
@@ -178,8 +157,7 @@ public class ServerConnection {
         String response = send(Protocol.DISCHARGE_PATIENT + Protocol.SEP + patientId);
         return isOk(response);
     }
-
-    // ── Billing ───────────────────────────────────────────────────────────
+//Billing
     public List<BillingEntry> getBill(int patientId) throws IOException {
         String response = send(Protocol.GET_BILL + Protocol.SEP + patientId);
         List<BillingEntry> entries = new ArrayList<>();
@@ -195,20 +173,16 @@ public class ServerConnection {
         }
         return entries;
     }
-
     public boolean addBillEntry(int patientId, String procedureName, double cost) throws IOException {
         String response = send(Protocol.ADD_BILL_ENTRY + Protocol.SEP + patientId
                 + Protocol.SEP + procedureName + Protocol.SEP + cost);
         return isOk(response);
     }
-
     public boolean deleteBillEntry(int patientId, String procedureName, double cost) throws IOException {
         String response = send(Protocol.DELETE_BILL_ENTRY + Protocol.SEP + patientId
                 + Protocol.SEP + procedureName + Protocol.SEP + cost);
         return isOk(response);
     }
-
-    // ── Heartbeat ─────────────────────────────────────────────────────────
     public boolean ping() {
         try {
             String response = send(Protocol.PING);
@@ -218,7 +192,7 @@ public class ServerConnection {
         }
     }
 
-    // ── Error message helper ──────────────────────────────────────────────
+//Error message helper
     public static String errorMessage(String response) {
         if (response != null && response.startsWith(Protocol.ERROR)) {
             String[] parts = response.split(Protocol.SEP, 2);
@@ -227,21 +201,7 @@ public class ServerConnection {
         return null;
     }
 
-    // ── I/O thread ────────────────────────────────────────────────────────
-    /**
-     * The single thread that owns the socket streams.
-     *
-     * FIX: The previous implementation only read from the socket when a
-     * request was in-flight. This meant PUSH_REFRESH messages that arrived
-     * while idle were never read, so real-time updates from other clients
-     * were silently dropped.
-     *
-     * The fixed design uses socket.setSoTimeout() to make readLine() return
-     * periodically (SocketTimeoutException) so the thread can also check the
-     * requestQueue. This way:
-     * - Idle pushes are dispatched as soon as they arrive (within ~100 ms).
-     * - Requests are processed and their responses returned to callers.
-     */
+//I/O thread 
     private void startIOThread() throws IOException {
         // Allow readLine() to time out so we can interleave queue polling
         socket.setSoTimeout(100);
@@ -321,12 +281,6 @@ public class ServerConnection {
             javax.swing.SwingUtilities.invokeLater(cb);
         }
     }
-
-    // ── Low-level send ────────────────────────────────────────────────────
-    /**
-     * Submits a message to the I/O thread and blocks until the response
-     * arrives. Safe to call from any thread.
-     */
     private String send(String message) throws IOException {
         if (!ioThreadActive)
             throw new IOException("I/O thread not running");
