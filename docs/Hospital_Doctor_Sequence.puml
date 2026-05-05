@@ -17,5 +17,6 @@ else Valid Login
 
     doctor -> server: enter patient information
     server -> doctor: provide billing information
+end
 
 @enduml

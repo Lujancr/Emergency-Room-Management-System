@@ -17,5 +17,6 @@ else Valid Login
 
     nurse -> server: enter patient information
     server -> nurse: provide billing information
+end
 
 @enduml
