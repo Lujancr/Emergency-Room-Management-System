@@ -1,0 +1,47 @@
+@startuml
+
+left to right direction
+
+actor :Nurse: as p1
+
+package "Login" {
+    usecase (Enter Username) as UC1
+    usecase (Enter Password) as UC2
+}
+
+usecase (View Patient Records) as UC3
+package "Update Patient Information" {
+    usecase (Enter Patient's Name) as UC4
+    usecase (Enter Patient's Age) as UC5
+    usecase (Enter Patient's Height) as UC6
+    usecase (Enter Patient's Weight) as UC7
+    usecase (Enter Patient's Condition) as UC8
+    usecase (Enter Patient's Severity Level) as UC9
+    usecase (Enter Doctor's Notes for Patient) as UC10
+}
+usecase (Search for Patients) as UC11
+usecase (Scroll to Search for Patients) as UC12
+
+package "Billing Information" {
+    usecase (View Billing Information) as UC13
+    usecase (Add Billing Information) as UC14
+    usecase (View Patient's Total Bill) as UC15
+}
+usecase (Create Patient Record) as UC17
+
+p1 --> UC1
+p1 --> UC2
+p1 --> UC3
+p1 --> UC4
+p1 --> UC5
+p1 --> UC6
+p1 --> UC7
+p1 --> UC8
+p1 --> UC9
+p1 --> UC11
+p1 --> UC12
+p1 --> UC13
+p1 --> UC15
+p1 --> UC17
+UC17 --> "Update Patient Information"
+@enduml
