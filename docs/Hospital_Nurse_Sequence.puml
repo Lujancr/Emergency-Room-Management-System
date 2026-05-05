@@ -1,0 +1,21 @@
+@startuml nurse
+
+'actors and participants
+actor nurse
+participant server
+participant fileManager
+
+fileManager -> server: load patient data
+fileManager -> server: load credentials file
+
+nurse -> server: login
+
+alt Invalid Login
+    server -> nurse: access denied
+else Valid Login
+    server -> nurse: access granted
+
+    nurse -> server: enter patient information
+    server -> nurse: provide billing information
+
+@enduml

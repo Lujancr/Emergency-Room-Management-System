@@ -1,0 +1,21 @@
+@startuml doctor
+
+'actors and participants
+actor doctor
+participant server
+participant fileMangager
+
+fileMangager -> server: load patients file
+fileMangager -> server: load credentials file
+
+doctor -> server: login
+
+alt Invalid Login
+    server -> doctor: access denied
+else Valid Login
+    server -> doctor: access granted
+
+    doctor -> server: enter patient information
+    server -> doctor: provide billing information
+
+@enduml
