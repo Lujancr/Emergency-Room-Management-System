@@ -10,43 +10,31 @@ import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.util.List;
 
-/**
- * MainWindow — primary application frame shared by Doctor and Nurse roles.
- *
- * Doctor view (wireframe image 2):
- * - Patient list (no "New Patient" button)
- * - Fields: Name, Age, Height, Weight, Condition, Severity, Notes
- * - Buttons: Billing Info | Discharge Patient | Update Patient
- *
- * Nurse view (wireframe image 1):
- * - Patient list with "New Patient" button at top
- * - Fields: Name, Age, Height, Weight, Condition, Severity (no Notes)
- * - Buttons: Billing Info | Create Patient / Update Patient
- */
+// The main window is the primary application frame shared by the doctor and nurse.
 public class MainWindow extends JFrame {
 
-    // ── Colour palette ────────────────────────────────────────────────────
+    // ── Colors
     private static final Color CLR_HEADER_BG   = new Color(173, 216, 230);
     private static final Color CLR_SIDEBAR_BG  = new Color(200, 225, 240);
     private static final Color CLR_FIELD_BG    = new Color(173, 216, 230);
     private static final Color CLR_DISCHARGED  = new Color(160, 160, 160);
     private static final Color CLR_BTN         = new Color(210, 210, 210);
-    private static final Color CLR_FIELD_OK    = new Color(140, 180, 210);  // normal border
-    private static final Color CLR_FIELD_ERROR = new Color(200,  60,  60);  // invalid border
+    private static final Color CLR_FIELD_OK    = new Color(140, 180, 210);
+    private static final Color CLR_FIELD_ERROR = new Color(200,  60,  60);
     private static final Font FONT_TITLE      = new Font("SansSerif", Font.BOLD,  18);
     private static final Font FONT_LABEL      = new Font("SansSerif", Font.PLAIN, 13);
     private static final Font FONT_PATIENT_ID = new Font("SansSerif", Font.BOLD,  13);
     private static final Font FONT_PATIENT_NM = new Font("SansSerif", Font.PLAIN, 11);
 
-    // ── Validation regexes ────────────────────────────────────────────────
+    // Validation regexes
     /**
      * Full name: first + last, letters/spaces/hyphens/apostrophes/commas/periods.
      * At least two whitespace-separated tokens are enforced separately.
      */
     private static final String RX_NAME     = "[A-Za-z][A-Za-z ,.'-]{1,99}";
     /**
-     * Age: integer 1–150 (no leading zeros beyond "0" itself, but we keep it
-     * simple — the range check happens in validateFields()).
+     * Age: integer 1–150
+     * The range check happens in validateFields().
      */
     private static final String RX_AGE      = "\\d{1,3}";
     /**
@@ -54,35 +42,28 @@ public class MainWindow extends JFrame {
      *   imperial:  5'11"  |  5' 11"  |  5'11  |  6'
      *   metric:    180cm  |  180 cm  |  1.80m  |  180
      *   decimal:   5.11
-     * The captured value is stored as a free-form string in the model.
      */
     private static final String RX_HEIGHT   =
         "\\d{1,3}(['\"]\\s*\\d{0,2}['\"]?|\\s*(cm|m)|(\\.\\d{1,2})?)?";
     /**
      * Weight: positive decimal (e.g. 70, 70.5, 0.5).
-     * Range check (> 0) happens in validateFields().
+     * The range check happens in validateFields().
      */
     private static final String RX_WEIGHT   = "\\d{1,4}(\\.\\d{1,2})?";
-    /**
-     * Condition: any printable text, 1–500 characters, not blank.
-     * Checked by non-emptiness + length, not a character-class regex.
-     */
-    // (no compile-time constant needed — checked inline)
-    /**
-     * Severity: single digit 1–4.
-     */
+
+    // Severity: single digit 1–4. 
     private static final String RX_SEVERITY = "[1-4]";
 
-    // ── State ─────────────────────────────────────────────────────────────
+    // State
     private final ServerConnection conn;
     private final boolean isDoctor;
     private Patient currentPatient = null;
 
-    // ── Sidebar widgets ───────────────────────────────────────────────────
+    // Sidebar widgets
     private JTextField searchField;
     private JPanel patientListPanel;
 
-    // ── Content-area widgets ──────────────────────────────────────────────
+    // Content-area widgets
     private JLabel patientIdLabel;
 
     private JTextField nameField;
@@ -97,7 +78,7 @@ public class MainWindow extends JFrame {
     private JButton dischargeButton; // doctor only
     private JButton actionButton; // "Create Patient" | "Update Patient"
 
-    // ── Constructor ───────────────────────────────────────────────────────
+    // Constructor
     public MainWindow(ServerConnection conn, boolean isDoctor) {
         this.conn = conn;
         this.isDoctor = isDoctor;
@@ -121,10 +102,7 @@ public class MainWindow extends JFrame {
         startHeartbeat();
     }
 
-    // ═════════════════════════════════════════════════════════════════════
     // UI Construction
-    // ═════════════════════════════════════════════════════════════════════
-
     private void buildUI() {
         setLayout(new BorderLayout());
         add(buildHeaderPanel(), BorderLayout.NORTH);
@@ -132,7 +110,7 @@ public class MainWindow extends JFrame {
         add(buildContentArea(), BorderLayout.CENTER);
     }
 
-    // ── Header ────────────────────────────────────────────────────────────
+    // Header
     private JPanel buildHeaderPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(CLR_HEADER_BG);
@@ -152,7 +130,7 @@ public class MainWindow extends JFrame {
         return panel;
     }
 
-    // ── Left sidebar ──────────────────────────────────────────────────────
+    // Left sidebar
     private JPanel buildSidebar() {
         JPanel sidebar = new JPanel(new BorderLayout(0, 4));
         sidebar.setBackground(CLR_SIDEBAR_BG);
@@ -209,12 +187,12 @@ public class MainWindow extends JFrame {
         return sidebar;
     }
 
-    // ── Right content area ────────────────────────────────────────────────
+    // Right content area
     private JPanel buildContentArea() {
         JPanel content = new JPanel(new BorderLayout());
         content.setBackground(Color.WHITE);
 
-        // Patient ID displayed above form (hidden when "New Patient")
+        // Patient ID label
         patientIdLabel = new JLabel(" ", SwingConstants.CENTER);
         patientIdLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
         patientIdLabel.setBorder(BorderFactory.createEmptyBorder(6, 10, 2, 10));
@@ -250,6 +228,7 @@ public class MainWindow extends JFrame {
 
         int row = 0;
 
+        // the fields
         nameField = makeTextField();
         attachValidator(nameField, RX_NAME);
         addFormRow(form, "Name:", nameField, lc, fc, row++);
@@ -332,10 +311,7 @@ public class MainWindow extends JFrame {
         return bar;
     }
 
-    // ═════════════════════════════════════════════════════════════════════
     // Patient list
-    // ═════════════════════════════════════════════════════════════════════
-
     public void refreshPatientList() {
         SwingWorker<List<Patient>, Void> worker = new SwingWorker<>() {
             @Override
@@ -425,7 +401,7 @@ public class MainWindow extends JFrame {
         patientListPanel.repaint();
     }
 
-    /** Recursively collects all JLabel text within a container. */
+
     private String collectText(Container container) {
         StringBuilder sb = new StringBuilder();
         for (Component c : container.getComponents()) {
@@ -437,9 +413,7 @@ public class MainWindow extends JFrame {
         return sb.toString();
     }
 
-    // ═════════════════════════════════════════════════════════════════════
     // Form population
-    // ═════════════════════════════════════════════════════════════════════
 
     private void showNewPatientForm() {
         currentPatient = null;
@@ -485,6 +459,7 @@ public class MainWindow extends JFrame {
         }
     }
 
+    // Make the fields editable
     private void setFieldsEditable(boolean editable) {
         nameField.setEditable(editable);
         ageField.setEditable(editable);
@@ -506,19 +481,17 @@ public class MainWindow extends JFrame {
             notesArea.setBackground(bg);
     }
 
-    // ═════════════════════════════════════════════════════════════════════
     // Actions
-    // ═════════════════════════════════════════════════════════════════════
 
     private void performAction() {
-        // ── validate all fields via centralised regex rules ──
+        // validate all fields using regex rules
         String error = validateFields();
         if (error != null) {
             showError(error);
             return;
         }
 
-        // ── safe to parse after validation ──
+        // safe to parse after validation
         String name      = nameField.getText().trim();
         String[] nameParts = name.split("\\s+", 2);
         String firstName = nameParts[0];
@@ -531,7 +504,7 @@ public class MainWindow extends JFrame {
         String notes     = (notesArea != null) ? notesArea.getText().trim() : "";
 
         if (currentPatient == null) {
-            // ── Create new patient (nurse) ──
+            // the nurse creates a new patient
             Patient p = new Patient(0, firstName, lastName, age,
                     height, weight, "", cond, severity, notes, false);
             SwingWorker<Integer, Void> worker = new SwingWorker<>() {
@@ -547,7 +520,7 @@ public class MainWindow extends JFrame {
                         if (newId < 0) {
                             showError("Server rejected patient creation.");
                         } else {
-                            p.setDischarged(false); // ensure
+                            p.setDischarged(false);
                             refreshPatientList();
                             // reload so we can show the assigned ID
                             Patient created = conn.getPatient(newId);
@@ -561,7 +534,7 @@ public class MainWindow extends JFrame {
             };
             worker.execute();
         } else {
-            // ── Update existing patient ──
+            // Update existing patient
             currentPatient.setFirstName(firstName);
             currentPatient.setLastName(lastName);
             currentPatient.setAge(age);
@@ -647,9 +620,7 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════
     // UI helpers
-    // ═════════════════════════════════════════════════════════════════════
 
     private JTextField makeTextField() {
         JTextField tf = new JTextField();
@@ -678,14 +649,7 @@ public class MainWindow extends JFrame {
         return sp;
     }
 
-    // ── Real-time validation helpers ──────────────────────────────────────
-
-    /**
-     * Attaches a DocumentListener to {@code field} that repaints the border
-     * red when the field's text does not match {@code regex}, and blue
-     * (normal) when it does.  Empty fields are shown as normal while the
-     * user hasn't typed yet — errors only surface once typing begins.
-     */
+    // Real-time validation helpers
     private void attachValidator(JTextField field, String regex) {
         field.getDocument().addDocumentListener(new DocumentListener() {
             public void insertUpdate(DocumentEvent e)  { recheck(); }
@@ -703,11 +667,9 @@ public class MainWindow extends JFrame {
         });
     }
 
-    /**
-     * Same as {@link #attachValidator} but watches a JTextArea and updates
-     * the enclosing JScrollPane's border instead.
-     * Rule: text must be 500 characters or fewer (blank is allowed while typing).
-     */
+    
+     // Rule: text must be 500 characters or fewer (blank is allowed while typing).
+     
     private void attachAreaValidator(JTextArea area, JScrollPane scroll) {
         area.getDocument().addDocumentListener(new DocumentListener() {
             public void insertUpdate(DocumentEvent e)  { recheck(); }
@@ -773,7 +735,7 @@ public class MainWindow extends JFrame {
                 return "Notes must be 500 characters or fewer.";
         }
 
-        return null; // all valid
+        return null;
     }
 
     private JButton makeButton(String text) {
@@ -800,11 +762,9 @@ public class MainWindow extends JFrame {
         JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);
     }
 
-    // ─────────────────────────────────────────────────────────────────────
     // Server disconnect detection
-    // ─────────────────────────────────────────────────────────────────────
 
-    /** Guards against showing the disconnected dialog more than once. */
+    // Guards against showing the disconnected dialog more than once.
     private volatile boolean disconnectHandled = false;
 
     /**
@@ -832,7 +792,7 @@ public class MainWindow extends JFrame {
                 }
             }
         });
-        heartbeat.setDaemon(true); // won't prevent JVM exit
+        heartbeat.setDaemon(true);
         heartbeat.start();
     }
 
